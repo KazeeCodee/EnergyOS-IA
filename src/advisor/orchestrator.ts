@@ -59,8 +59,37 @@ function companyLabel(snapshot: EnergySnapshot): string {
   return `${name} (${snapshot.nemo})`;
 }
 
+function inputCompanyLabel(input: AdvisorChatInput): string {
+  return input.companyName ? `${input.companyName} (${input.nemo})` : input.nemo;
+}
+
+function buildGreetingFromInput(input: AdvisorChatInput): string {
+  const period = input.period ? ` del periodo ${input.period}` : '';
+  return `Hola, buen dia. Estoy listo para ayudarte con ${inputCompanyLabel(input)}${period}. Decime que queres revisar y lo vemos con datos: costos, consumo, spot, contratos, facturas o cumplimiento renovable.`;
+}
+
 function buildGreeting(snapshot: EnergySnapshot): string {
   return `Hola, buen dia. Estoy listo para ayudarte con ${companyLabel(snapshot)}. Podes pedirme revisar costos, consumo, exposicion spot, contratos, facturas, cumplimiento renovable o desvios del periodo ${snapshot.resolvedPeriod ?? snapshot.requestedPeriod ?? 'disponible'}.`;
+}
+
+function buildEmptyGreetingMetrics(input: AdvisorChatInput): AdvisorMetrics {
+  return {
+    companyId: input.companyId,
+    nemo: input.nemo,
+    period: input.period ?? null,
+    totalConsumptionMwh: null,
+    contractedMwh: null,
+    spotMwh: null,
+    spotExposurePct: null,
+    contractCoveragePct: null,
+    spotCostPesos: null,
+    invoiceTotalPesos: null,
+    costDtePesosMwh: null,
+    renewableYtdPct: null,
+    renewableGapYtdMwh: null,
+    estimatedRenewablePenaltyPesos: null,
+    riskScore: null,
+  };
 }
 
 function buildDeterministicResponse(input: AdvisorResponseWriterInput): string {
@@ -133,6 +162,37 @@ export async function runAdvisorChat(
         filesCount: input.files.length,
       },
     }) ?? null;
+
+    if (intent === 'greeting') {
+      const output = AdvisorRunOutputSchema.parse({
+        response: buildGreetingFromInput(input),
+        intent,
+        companyId: input.companyId,
+        companyName: input.companyName,
+        nemo: input.nemo,
+        period: input.period ?? null,
+        metrics: buildEmptyGreetingMetrics(input),
+        findings: [],
+        recommendations: [],
+        missingData: [],
+        limitations: [],
+        dataUsed: [],
+        evidence: [],
+        filesReceived: input.files as AdvisorFile[],
+        fileAnalyses: [],
+        qa: {
+          passed: true,
+          issues: [],
+        },
+      });
+
+      await options.runStore?.complete({
+        runId,
+        output: output as unknown as Record<string, unknown>,
+      });
+
+      return output;
+    }
 
     const snapshot = await snapshotBuilder({
       companyId: input.companyId,

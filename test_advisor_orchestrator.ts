@@ -96,6 +96,27 @@ assert.match(monthly.response, /64904\.06 MWh/);
 assert.match(monthly.response, /ARS 2864505674/);
 assert.equal(monthly.qa.passed, true);
 
+let greetingSnapshotCalls = 0;
+const greeting = await runAdvisorChat({
+  ...baseInput,
+  question: 'hola buenos dias',
+  includePrivateContext: true,
+}, {
+  snapshotBuilder: async () => {
+    greetingSnapshotCalls += 1;
+    return makeSnapshot();
+  },
+  responseWriter: () => 'Resumen analitico indebido con 64904.06 MWh.',
+});
+
+assert.equal(greeting.intent, 'greeting');
+assert.equal(greetingSnapshotCalls, 0);
+assert.match(greeting.response, /Acindar Industria Argentina \(ACINVCSZ\)/);
+assert.doesNotMatch(greeting.response, /64904\.06|Demanda real|Hallazgos|Acciones recomendadas/i);
+assert.equal(greeting.findings.length, 0);
+assert.equal(greeting.recommendations.length, 0);
+assert.equal(greeting.dataUsed.length, 0);
+
 const runStoreCalls: string[] = [];
 await runAdvisorChat(baseInput, {
   snapshotBuilder: async () => makeSnapshot(),
