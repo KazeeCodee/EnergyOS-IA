@@ -16,7 +16,7 @@ export const AdvisorChatInputSchema = z.object({
   period: z.string().regex(/^\d{4}-\d{2}$/).optional(),
   question: z.string().trim().min(1).max(5000),
   includePrivateContext: z.boolean().default(true),
-  conversationId: z.string().trim().min(1).max(120).optional(),
+  conversationId: z.string().uuid().optional(),
   files: z.array(AdvisorFileSchema).default([]),
 });
 
@@ -224,6 +224,62 @@ export const AdvisorRecommendationSchema = z.object({
   requiredData: z.array(z.string()).default([]),
 });
 
+export const AdvisorConversationCreateInputSchema = z.object({
+  companyId: z.string().uuid(),
+  companyName: z.string().trim().min(1).max(200).optional(),
+  nemo: z.string().trim().regex(/^[A-Za-z0-9]{8}$/).transform((value) => value.toUpperCase()),
+  title: z.string().trim().min(1).max(120).optional(),
+});
+
+export const AdvisorConversationListQuerySchema = z.object({
+  nemo: z.string().trim().regex(/^[A-Za-z0-9]{8}$/).transform((value) => value.toUpperCase()),
+});
+
+export const AdvisorConversationUpdateInputSchema = z.object({
+  title: z.string().trim().min(1).max(120).optional(),
+  status: z.enum(['active', 'archived']).optional(),
+}).refine((value) => value.title !== undefined || value.status !== undefined, {
+  message: 'Debe enviar title o status',
+});
+
+export const AdvisorConversationOutputSchema = z.object({
+  id: z.string().uuid(),
+  companyId: z.string().uuid(),
+  nemo: z.string().regex(/^[A-Z0-9]{8}$/),
+  title: z.string(),
+  status: z.enum(['active', 'archived', 'deleted']),
+  summary: z.string().nullable(),
+  lastMessageAt: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const AdvisorMessageOutputSchema = z.object({
+  id: z.string().uuid(),
+  conversationId: z.string().uuid(),
+  role: z.enum(['user', 'assistant', 'system']),
+  content: z.string(),
+  intent: z.string().nullable(),
+  metadata: z.record(z.unknown()).default({}),
+  runId: z.string().uuid().nullable().optional(),
+  createdAt: z.string(),
+});
+
+export const AdvisorMemoryItemOutputSchema = z.object({
+  id: z.string().uuid(),
+  scope: z.enum(['user', 'nemo', 'conversation']),
+  type: z.enum(['preference', 'confirmed_fact', 'decision', 'open_issue', 'task_context']),
+  content: z.string(),
+  confidence: z.enum(['low', 'medium', 'high']),
+});
+
+export const ConversationContextSchema = z.object({
+  conversationId: z.string().uuid(),
+  summary: z.string().nullable(),
+  recentMessages: z.array(AdvisorMessageOutputSchema),
+  memory: z.array(AdvisorMemoryItemOutputSchema),
+});
+
 export const AdvisorRunOutputSchema = z.object({
   response: z.string(),
   intent: z.string(),
@@ -231,6 +287,9 @@ export const AdvisorRunOutputSchema = z.object({
   companyName: z.string().optional(),
   nemo: z.string().regex(/^[A-Z0-9]{8}$/),
   period: z.string().regex(/^\d{4}-\d{2}$/).nullable(),
+  conversationId: z.string().uuid().optional(),
+  messageId: z.string().uuid().optional(),
+  assistantMessageId: z.string().uuid().optional(),
   metrics: AdvisorMetricsSchema,
   findings: z.array(AdvisorFindingSchema),
   recommendations: z.array(AdvisorRecommendationSchema),
@@ -255,4 +314,9 @@ export type AdvisorMetrics = z.infer<typeof AdvisorMetricsSchema>;
 export type AdvisorFinding = z.infer<typeof AdvisorFindingSchema>;
 export type AdvisorFileAnalysis = z.infer<typeof AdvisorFileAnalysisSchema>;
 export type AdvisorRecommendation = z.infer<typeof AdvisorRecommendationSchema>;
+export type AdvisorConversationCreateInput = z.infer<typeof AdvisorConversationCreateInputSchema>;
+export type AdvisorConversationOutput = z.infer<typeof AdvisorConversationOutputSchema>;
+export type AdvisorMessageOutput = z.infer<typeof AdvisorMessageOutputSchema>;
+export type AdvisorMemoryItemOutput = z.infer<typeof AdvisorMemoryItemOutputSchema>;
+export type ConversationContext = z.infer<typeof ConversationContextSchema>;
 export type AdvisorRunOutput = z.infer<typeof AdvisorRunOutputSchema>;
