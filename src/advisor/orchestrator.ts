@@ -15,7 +15,11 @@ import { calculateAdvisorMetrics } from './metricsV2.js';
 import { classifyAdvisorIntent, type AdvisorIntent } from './intentRouter.js';
 import { runAdvisorSpecialists, type SpecialistOutput } from './specialists.js';
 import { validateAdvisorResponse } from './qaValidator.js';
-import { analyzeAdvisorFiles } from './documentIntake.js';
+import {
+  analyzeAdvisorFiles,
+  createGeminiInlineFileExtractorFromEnv,
+  type DocumentIntakeOptions,
+} from './documentIntake.js';
 
 export type AdvisorResponseWriterInput = {
   input: AdvisorChatInput;
@@ -28,6 +32,7 @@ export type AdvisorResponseWriterInput = {
 export type AdvisorOrchestratorOptions = {
   snapshotBuilder?: (input: EnergySnapshotInput) => Promise<EnergySnapshot>;
   responseWriter?: (input: AdvisorResponseWriterInput) => string | Promise<string>;
+  fileAiExtractor?: NonNullable<DocumentIntakeOptions['aiExtractor']>;
   userToken?: string;
 };
 
@@ -122,7 +127,9 @@ export async function runAdvisorChat(
   });
 
   const metrics = calculateAdvisorMetrics(snapshot);
-  const fileAnalyses = await analyzeAdvisorFiles(input.files);
+  const fileAnalyses = await analyzeAdvisorFiles(input.files, {
+    aiExtractor: options.fileAiExtractor ?? createGeminiInlineFileExtractorFromEnv() ?? undefined,
+  });
   const specialistOutput = runAdvisorSpecialists({
     intent,
     snapshot,

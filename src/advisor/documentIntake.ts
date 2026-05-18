@@ -36,6 +36,12 @@ export type DocumentIntakeOptions = {
   aiExtractor?: (file: AdvisorFile, kind: AdvisorFileKind) => Promise<AiFileExtraction>;
 };
 
+export type GeminiInlineFileExtractorOptions = {
+  apiKey: string;
+  model: string;
+  fetchImpl?: typeof fetch;
+};
+
 const WORD_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -150,6 +156,79 @@ async function analyzeOne(file: AdvisorFile, options: DocumentIntakeOptions): Pr
       limitations: [`No se pudo procesar el archivo: ${message}`],
     };
   }
+}
+
+function parseGeminiExtractionText(text: string): AiFileExtraction {
+  const trimmed = text.trim();
+  try {
+    const parsed = JSON.parse(trimmed) as Partial<AiFileExtraction>;
+    return {
+      summary: typeof parsed.summary === 'string' ? parsed.summary : trimmed,
+      fields: parsed.fields && typeof parsed.fields === 'object' ? parsed.fields : {},
+      confidence: parsed.confidence === 'high' || parsed.confidence === 'medium' || parsed.confidence === 'low'
+        ? parsed.confidence
+        : 'medium',
+    };
+  } catch {
+    return {
+      summary: trimmed,
+      fields: {},
+      confidence: 'medium',
+    };
+  }
+}
+
+export function createGeminiInlineFileExtractor(options: GeminiInlineFileExtractorOptions) {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  return async (file: AdvisorFile, kind: AdvisorFileKind): Promise<AiFileExtraction> => {
+    const response = await fetchImpl(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(options.model)}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': options.apiKey,
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                text: `Extrae informacion energetica estructurada del archivo ${file.name} (${kind}). Devolve exclusivamente JSON con este formato: {"summary":"...","fields":{},"confidence":"low|medium|high"}. No inventes valores faltantes.`,
+              },
+              {
+                inlineData: {
+                  mimeType: file.type,
+                  data: file.content,
+                },
+              },
+            ],
+          }],
+          generationConfig: {
+            maxOutputTokens: 2048,
+          },
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini file extraction failed ${response.status}: ${errorText.slice(0, 300)}`);
+    }
+
+    const payload = await response.json() as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim();
+    if (!text) throw new Error('Gemini file extraction returned empty response');
+    return parseGeminiExtractionText(text);
+  };
+}
+
+export function createGeminiInlineFileExtractorFromEnv() {
+  const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_AI_API_KEY;
+  if (!apiKey) return null;
+  const model = process.env.GEMINI_MODEL ?? process.env.GOOGLE_AI_MODEL ?? 'gemini-2.5-flash';
+  return createGeminiInlineFileExtractor({ apiKey, model });
 }
 
 export async function analyzeAdvisorFiles(

@@ -111,6 +111,22 @@ assert.equal(withFile.fileAnalyses[0].kind, 'pdf');
 assert.equal(withFile.fileAnalyses[0].status, 'requires_ai_extraction');
 assert.equal(withFile.findings.some((finding) => finding.type === 'file_received'), true);
 
+const withAiFile = await runAdvisorChat({
+  ...baseInput,
+  question: 'analiza este pdf',
+  files: [{ name: 'factura.pdf', type: 'application/pdf', content: 'ZmFrZQ==' }],
+}, {
+  snapshotBuilder: async () => makeSnapshot(),
+  fileAiExtractor: async (file) => ({
+    summary: `IA extrajo ${file.name}`,
+    fields: { documentType: 'factura' },
+    confidence: 'high',
+  }),
+});
+
+assert.equal(withAiFile.fileAnalyses[0].status, 'extracted');
+assert.equal(withAiFile.fileAnalyses[0].aiExtraction?.fields.documentType, 'factura');
+
 const corrected = await runAdvisorChat(baseInput, {
   snapshotBuilder: async () => makeSnapshot(),
   responseWriter: () => 'No hay datos disponibles para el periodo 2026-03.',
