@@ -8,6 +8,8 @@ export type ProviderMessage = {
   role: 'user' | 'assistant' | 'tool_result';
   content: string;
   tool_call_id?: string;
+  toolCalls?: ProviderToolCall[];
+  providerData?: unknown;
 };
 
 export type ProviderToolCall = {
@@ -30,6 +32,8 @@ export type ProviderResponse = {
   };
   /** Stop reason */
   stopReason: string;
+  /** Provider-specific payload needed to continue tool conversations. */
+  providerData?: unknown;
 };
 
 /**

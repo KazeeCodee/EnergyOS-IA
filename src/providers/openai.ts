@@ -105,6 +105,20 @@ export class OpenAIProvider implements AIProvider {
           tool_call_id: msg.tool_call_id,
         };
       }
+      if (msg.role === 'assistant') {
+        return {
+          role: 'assistant',
+          content: msg.content,
+          tool_calls: msg.toolCalls?.map(tc => ({
+            id: tc.id,
+            type: 'function',
+            function: {
+              name: tc.name,
+              arguments: JSON.stringify(tc.arguments),
+            },
+          })),
+        };
+      }
       return {
         role: msg.role,
         content: msg.content,

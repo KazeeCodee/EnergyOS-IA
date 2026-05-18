@@ -36,6 +36,10 @@ const envSchema = z.object({
   ANTHROPIC_MODEL: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().optional(),
+  GOOGLE_AI_API_KEY: z.string().optional(),
+  GOOGLE_AI_MODEL: z.string().optional(),
 });
 
 function loadEnv() {

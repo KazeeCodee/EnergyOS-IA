@@ -130,6 +130,8 @@ export async function runAgenticLoop(
       messages.push({
         role: 'assistant',
         content: response.text ?? '',
+        toolCalls: response.toolCalls,
+        providerData: response.providerData,
       });
 
       const toolCallsToExecute = response.toolCalls.slice(0, MAX_TOOL_CALLS_PER_TURN);

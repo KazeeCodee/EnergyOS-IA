@@ -100,7 +100,19 @@ export class AnthropicProvider implements AIProvider {
           });
         }
       } else if (msg.role === 'assistant') {
-        result.push({ role: 'assistant', content: msg.content });
+        const content: AnthropicContentBlock[] = [];
+        if (msg.content) {
+          content.push({ type: 'text', text: msg.content });
+        }
+        for (const toolCall of msg.toolCalls ?? []) {
+          content.push({
+            type: 'tool_use',
+            id: toolCall.id,
+            name: toolCall.name,
+            input: toolCall.arguments,
+          });
+        }
+        result.push({ role: 'assistant', content: content.length > 0 ? content : msg.content });
       } else {
         result.push({ role: 'user', content: msg.content });
       }
