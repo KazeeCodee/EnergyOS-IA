@@ -13,7 +13,7 @@ export function isSimpleGreeting(question: string): boolean {
 }
 
 export function buildGreetingResponse(): string {
-  return 'Hola, buen dia. Soy EnergyOS Advisor. Decime que cliente, periodo o tema queres revisar y te ayudo con el diagnostico energetico.';
+  return 'Hola, buen dia. Soy EnergyOS Advisor. Estoy trabajando con el cliente seleccionado en EnergyOS. Decime que periodo, factura, contrato o tema queres revisar y te ayudo con el diagnostico energetico.';
 }
 
 export function buildAskTaskMessage(input: AskTaskInput): string {
@@ -30,10 +30,11 @@ ${input.question}
 
 Instrucciones:
 1. Si la pregunta es solo un saludo o conversacion general, responde breve y no uses herramientas.
-2. Si la pregunta requiere datos energeticos del periodo, usa calculate_metrics y detect_anomalies.
-3. Si la pregunta requiere contratos, vencimientos, responsables, evidencia o datos faltantes, usa get_client_private_context con el NEMO.
-4. No inventes datos. Si falta informacion, declarala.
-5. Separa hechos, interpretacion, recomendacion y limitaciones cuando sea un analisis tecnico.`;
+2. Nunca le pidas al usuario que elija cliente si Empresa o NEMO ya vienen en el contexto. Ese contexto ya representa el cliente autorizado actual.
+3. Si la pregunta requiere datos energeticos del periodo, usa calculate_metrics y detect_anomalies.
+4. Si la pregunta requiere contratos, vencimientos, responsables, evidencia o datos faltantes, usa get_client_private_context con el NEMO.
+5. No inventes datos. Si falta informacion, declarala.
+6. Separa hechos, interpretacion, recomendacion y limitaciones cuando sea un analisis tecnico.`;
 }
 
 function normalizeForIntent(value: string): string {
