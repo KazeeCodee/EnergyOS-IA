@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AdvisorFileSchema } from './advisor.schema.js';
 
 /** Input para el endpoint POST /agent/analyze-period */
 export const AnalyzePeriodInputSchema = z.object({
@@ -19,6 +20,7 @@ export const AskInputSchema = z.object({
   period: z.string().regex(/^\d{4}-\d{2}$/).optional(),
   question: z.string().min(1).max(2000),
   includePrivateContext: z.boolean().default(false),
+  files: z.array(AdvisorFileSchema).default([]),
 });
 
 export type AskInput = z.infer<typeof AskInputSchema>;
