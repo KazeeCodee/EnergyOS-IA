@@ -144,6 +144,9 @@ const app = createAdvisorChatApi({
       qa: { passed: true, issues: [] },
     };
   },
+  updateConversationSummary: async (input) => {
+    calls.push(`summary:${input.conversationId}:${input.userId}:${input.nemo}`);
+  },
 });
 
 const createResponse = await app.request('/', {
@@ -168,6 +171,7 @@ assert.equal(calls.includes(`conversation:create:${userId}:ACINVCSZ:resumime el 
 assert.equal(calls.includes(`message:user:${conversationId}:resumime el ultimo mes:`), true);
 assert.equal(calls.includes(`advisor:${conversationId}:resumime el ultimo mes`), true);
 assert.equal(calls.includes(`message:assistant:${conversationId}:Respuesta persistida.:monthly_summary`), true);
+assert.equal(calls.includes(`summary:${conversationId}:${userId}:ACINVCSZ`), true);
 assert.equal(capturedContext?.conversationId, conversationId);
 assert.equal(capturedContext?.summary, 'El usuario venia revisando costos.');
 

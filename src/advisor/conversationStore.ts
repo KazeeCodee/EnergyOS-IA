@@ -96,6 +96,16 @@ export type UpdateConversationInput = GetConversationInput & {
 
 export type DeleteConversationInput = GetConversationInput;
 
+export type ConversationSummaryState = {
+  messageCount: number;
+  currentSummary: string | null;
+  messages: AdvisorMessageOutput[];
+};
+
+export type UpdateConversationSummaryInput = GetConversationInput & {
+  summary: string;
+};
+
 function normalizeNemo(nemo: string): string {
   return nemo.trim().toUpperCase().slice(0, 8);
 }
@@ -386,6 +396,71 @@ export async function softDeleteConversation(input: DeleteConversationInput): Pr
         and user_id = ${input.userId}
         and company_id = ${input.companyId}
         and nemo = ${nemo}
+    `;
+  });
+}
+
+export async function getConversationSummaryState(input: LoadConversationContextInput): Promise<ConversationSummaryState> {
+  const nemo = normalizeNemo(input.nemo);
+  const limit = input.limit ?? 40;
+
+  return withSql(input.sqlFactory, async (sql) => {
+    const conversations = await sql<ConversationRow[]>`
+      select id, company_id, nemo, title, status, summary, last_message_at, created_at, updated_at
+      from public.advisor_conversations
+      where id = ${input.conversationId}
+        and user_id = ${input.userId}
+        and company_id = ${input.companyId}
+        and nemo = ${nemo}
+        and status <> 'deleted'
+      limit 1
+    `;
+
+    const conversation = conversations[0];
+    if (!conversation) {
+      throw new Error('Conversacion no encontrada o no autorizada');
+    }
+
+    const countRows = await sql<Array<{ count: number | string }>>`
+      select count(*)::int as count
+      from public.advisor_messages
+      where conversation_id = ${input.conversationId}
+    `;
+
+    const messages = await sql<MessageRow[]>`
+      select id, conversation_id, role, content, intent, metadata, run_id, created_at
+      from (
+        select id, conversation_id, role, content, intent, metadata, run_id, created_at
+        from public.advisor_messages
+        where conversation_id = ${input.conversationId}
+        order by created_at desc
+        limit ${limit}
+      ) recent
+      order by created_at asc
+    `;
+
+    return {
+      messageCount: Number(countRows[0]?.count ?? 0),
+      currentSummary: conversation.summary,
+      messages: messages.map(mapMessage),
+    };
+  });
+}
+
+export async function updateConversationSummary(input: UpdateConversationSummaryInput): Promise<void> {
+  const nemo = normalizeNemo(input.nemo);
+
+  await withSql(input.sqlFactory, async (sql) => {
+    await sql`
+      update public.advisor_conversations
+      set summary = ${input.summary},
+          summary_updated_at = now(),
+          updated_at = now()
+      where id = ${input.conversationId}
+        and user_id = ${input.userId}
+        and company_id = ${input.companyId}
+        and nemo = ${nemo}
+        and status <> 'deleted'
     `;
   });
 }

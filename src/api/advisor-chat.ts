@@ -13,6 +13,7 @@ import {
   type GetConversationInput,
   type LoadConversationContextInput,
 } from '../advisor/conversationStore.js';
+import { maybeUpdateConversationSummary } from '../advisor/conversationSummary.js';
 import type { Context } from 'hono';
 import type { AdvisorOrchestratorOptions } from '../advisor/orchestrator.js';
 
@@ -31,6 +32,12 @@ export type AdvisorChatApiOptions = {
     input: Parameters<typeof defaultRunAdvisorChat>[0],
     options: AdvisorOrchestratorOptions,
   ) => Promise<AdvisorRunOutput>;
+  updateConversationSummary?: (input: {
+    conversationId: string;
+    userId: string;
+    companyId: string;
+    nemo: string;
+  }) => Promise<void>;
 };
 
 function defaultConversationStore(): AdvisorChatConversationStore {
@@ -70,6 +77,7 @@ export function createAdvisorChatApi(options: AdvisorChatApiOptions = {}) {
   const createRunStore = options.createRunStore ?? createDefaultAdvisorRunStore;
   const conversationStore = options.conversationStore ?? defaultConversationStore();
   const runAdvisorChat = options.runAdvisorChat ?? defaultRunAdvisorChat;
+  const updateSummary = options.updateConversationSummary ?? maybeUpdateConversationSummary;
 
   app.post('/', async (c) => {
     const json = await parseJson(c);
@@ -155,6 +163,15 @@ export function createAdvisorChatApi(options: AdvisorChatApiOptions = {}) {
         content: result.response,
         intent: result.intent,
         metadata: result as unknown as Record<string, unknown>,
+      });
+
+      await updateSummary({
+        conversationId,
+        userId,
+        companyId: parsed.data.companyId,
+        nemo,
+      }).catch((error) => {
+        console.error('Error updating advisor conversation summary:', error);
       });
 
       return c.json({
