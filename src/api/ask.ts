@@ -18,7 +18,7 @@ app.post('/', async (c) => {
     }, 400);
   }
 
-  const { companyId, nemo, period, question, includePrivateContext } = parsed.data;
+  const { companyId, companyName, nemo, period, question, includePrivateContext } = parsed.data;
   const auth = await requireAuthIfConfigured(c);
   if (!auth.ok) return auth.response;
 
@@ -30,7 +30,7 @@ app.post('/', async (c) => {
 
   if (isSimpleGreeting(question)) {
     return c.json({
-      response: buildGreetingResponse(),
+      response: buildGreetingResponse({ companyName, nemo, period }),
       model: 'deterministic',
       provider: 'energyos',
       iterations: 0,
@@ -45,7 +45,7 @@ app.post('/', async (c) => {
     }, 503);
   }
 
-  const taskMessage = buildAskTaskMessage({ companyId, nemo, period, question, includePrivateContext });
+  const taskMessage = buildAskTaskMessage({ companyId, companyName, nemo, period, question, includePrivateContext });
 
   let result;
   try {

@@ -1,5 +1,6 @@
 export type AskTaskInput = {
   companyId: string;
+  companyName?: string;
   nemo?: string;
   period?: string;
   question: string;
@@ -12,15 +13,18 @@ export function isSimpleGreeting(question: string): boolean {
   return SIMPLE_GREETING_PATTERN.test(normalizeForIntent(question));
 }
 
-export function buildGreetingResponse(): string {
-  return 'Hola, buen dia. Soy EnergyOS Advisor. Estoy trabajando con el cliente seleccionado en EnergyOS. Decime que periodo, factura, contrato o tema queres revisar y te ayudo con el diagnostico energetico.';
+export function buildGreetingResponse(input: Pick<AskTaskInput, 'companyName' | 'nemo' | 'period'>): string {
+  const companyLabel = buildCompanyLabel(input.companyName, input.nemo);
+  const periodText = input.period ? ` del periodo ${input.period}` : '';
+  return `Hola, buen dia. Estoy listo para ayudarte con ${companyLabel}. Podes pedirme revisar costos, consumo, exposicion spot, contratos, facturas o desvios${periodText}.`;
 }
 
 export function buildAskTaskMessage(input: AskTaskInput): string {
   return `Responde la pregunta del usuario como EnergyOS Analyst.
 
 Contexto solicitado:
-- Empresa: ${input.companyId}
+- Empresa autorizada: ${input.companyName ?? input.companyId}
+- Company ID: ${input.companyId}
 - NEMO: ${input.nemo ?? 'no informado'}
 - Periodo: ${input.period ?? 'no informado'}
 - Usar contexto privado: ${input.includePrivateContext ? 'si' : 'no'}
@@ -30,11 +34,20 @@ ${input.question}
 
 Instrucciones:
 1. Si la pregunta es solo un saludo o conversacion general, responde breve y no uses herramientas.
-2. Nunca le pidas al usuario que elija cliente si Empresa o NEMO ya vienen en el contexto. Ese contexto ya representa el cliente autorizado actual.
+2. Nunca le pidas al usuario que elija cliente. La Empresa autorizada y el NEMO del contexto ya son el cliente actual.
 3. Si la pregunta requiere datos energeticos del periodo, usa calculate_metrics y detect_anomalies.
 4. Si la pregunta requiere contratos, vencimientos, responsables, evidencia o datos faltantes, usa get_client_private_context con el NEMO.
 5. No inventes datos. Si falta informacion, declarala.
 6. Separa hechos, interpretacion, recomendacion y limitaciones cuando sea un analisis tecnico.`;
+}
+
+function buildCompanyLabel(companyName: string | undefined, nemo: string | undefined): string {
+  const cleanName = companyName?.trim();
+  const cleanNemo = nemo?.trim();
+  if (cleanName && cleanNemo) return `${cleanName} (${cleanNemo})`;
+  if (cleanName) return cleanName;
+  if (cleanNemo) return `NEMO ${cleanNemo}`;
+  return 'este agente';
 }
 
 function normalizeForIntent(value: string): string {

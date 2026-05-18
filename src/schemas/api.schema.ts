@@ -14,6 +14,7 @@ export type AnalyzePeriodInput = z.infer<typeof AnalyzePeriodInputSchema>;
 /** Input para el endpoint POST /agent/ask */
 export const AskInputSchema = z.object({
   companyId: z.string().uuid(),
+  companyName: z.string().trim().min(1).max(200).optional(),
   nemo: z.string().regex(/^[A-Za-z0-9]{8}$/).optional(),
   period: z.string().regex(/^\d{4}-\d{2}$/).optional(),
   question: z.string().min(1).max(2000),
