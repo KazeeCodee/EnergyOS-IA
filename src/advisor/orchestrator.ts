@@ -15,6 +15,7 @@ import { calculateAdvisorMetrics } from './metricsV2.js';
 import { classifyAdvisorIntent, type AdvisorIntent } from './intentRouter.js';
 import { runAdvisorSpecialists, type SpecialistOutput } from './specialists.js';
 import { validateAdvisorResponse } from './qaValidator.js';
+import { analyzeAdvisorFiles } from './documentIntake.js';
 
 export type AdvisorResponseWriterInput = {
   input: AdvisorChatInput;
@@ -121,6 +122,7 @@ export async function runAdvisorChat(
   });
 
   const metrics = calculateAdvisorMetrics(snapshot);
+  const fileAnalyses = await analyzeAdvisorFiles(input.files);
   const specialistOutput = runAdvisorSpecialists({
     intent,
     snapshot,
@@ -150,6 +152,7 @@ export async function runAdvisorChat(
     dataUsed: snapshot.dataUsed,
     evidence: specialistOutput.evidence,
     filesReceived: input.files as AdvisorFile[],
+    fileAnalyses,
     qa: {
       passed: qa.passed,
       issues: qa.issues,

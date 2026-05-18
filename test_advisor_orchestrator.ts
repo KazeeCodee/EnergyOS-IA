@@ -106,6 +106,9 @@ const withFile = await runAdvisorChat({
 
 assert.equal(withFile.intent, 'document_intake');
 assert.equal(withFile.filesReceived.length, 1);
+assert.equal(withFile.fileAnalyses.length, 1);
+assert.equal(withFile.fileAnalyses[0].kind, 'pdf');
+assert.equal(withFile.fileAnalyses[0].status, 'requires_ai_extraction');
 assert.equal(withFile.findings.some((finding) => finding.type === 'file_received'), true);
 
 const corrected = await runAdvisorChat(baseInput, {

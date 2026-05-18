@@ -186,6 +186,26 @@ export const AdvisorFindingSchema = z.object({
   missingData: z.array(z.string()).default([]),
 });
 
+export const AdvisorFileAnalysisSchema = z.object({
+  name: z.string(),
+  type: z.string(),
+  kind: z.string(),
+  status: z.enum(['extracted', 'requires_ai_extraction', 'failed']),
+  textPreview: z.string().optional(),
+  structured: z.object({
+    kind: z.enum(['table', 'json', 'text']),
+    rows: z.number().int().nonnegative().optional(),
+    columns: z.array(z.string()).optional(),
+    data: z.unknown().optional(),
+  }).optional(),
+  aiExtraction: z.object({
+    summary: z.string(),
+    fields: z.record(z.unknown()),
+    confidence: z.enum(['low', 'medium', 'high']),
+  }).optional(),
+  limitations: z.array(z.string()),
+});
+
 export const AdvisorRecommendationSchema = z.object({
   id: z.string(),
   priority: z.enum(['low', 'medium', 'high', 'critical']),
@@ -209,6 +229,7 @@ export const AdvisorRunOutputSchema = z.object({
   dataUsed: z.array(z.string()),
   evidence: z.array(EvidenceRefSchema),
   filesReceived: z.array(AdvisorFileSchema),
+  fileAnalyses: z.array(AdvisorFileAnalysisSchema),
   qa: z.object({
     passed: z.boolean(),
     issues: z.array(z.string()),
@@ -221,5 +242,6 @@ export type EvidenceRef = z.infer<typeof EvidenceRefSchema>;
 export type EnergySnapshot = z.infer<typeof EnergySnapshotSchema>;
 export type AdvisorMetrics = z.infer<typeof AdvisorMetricsSchema>;
 export type AdvisorFinding = z.infer<typeof AdvisorFindingSchema>;
+export type AdvisorFileAnalysis = z.infer<typeof AdvisorFileAnalysisSchema>;
 export type AdvisorRecommendation = z.infer<typeof AdvisorRecommendationSchema>;
 export type AdvisorRunOutput = z.infer<typeof AdvisorRunOutputSchema>;
