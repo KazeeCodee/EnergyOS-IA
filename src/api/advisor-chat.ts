@@ -7,7 +7,13 @@ import { createDefaultAdvisorRunStore } from '../advisor/runStore.js';
 const app = new Hono();
 
 app.post('/', async (c) => {
-  const body = await c.req.json();
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Input invalido', details: 'JSON invalido' }, 400);
+  }
+
   const parsed = AdvisorChatInputSchema.safeParse(body);
 
   if (!parsed.success) {

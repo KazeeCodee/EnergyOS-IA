@@ -8,7 +8,13 @@ import { requireAuthorizedNemoIfConfigured } from './auth.js';
 const app = new Hono();
 
 app.post('/approve', async (c) => {
-  const body = await c.req.json();
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Input invalido', details: 'JSON invalido' }, 400);
+  }
+
   const parsed = AdvisorTaskApprovalSchema.safeParse(body);
 
   if (!parsed.success) {
