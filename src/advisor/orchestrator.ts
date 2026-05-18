@@ -21,6 +21,7 @@ import {
   type DocumentIntakeOptions,
 } from './documentIntake.js';
 import type { AdvisorRunStore } from './runStore.js';
+import { createAdvisorLlmResponseWriterFromEnv } from './responseWriter.js';
 
 export type AdvisorResponseWriterInput = {
   input: AdvisorChatInput;
@@ -153,9 +154,13 @@ export async function runAdvisorChat(
       files: input.files,
     });
 
+    const writerInput = { input, intent, snapshot, metrics, specialistOutput };
+    const envWriter = options.responseWriter ? null : await createAdvisorLlmResponseWriterFromEnv();
     const response = options.responseWriter
-      ? await options.responseWriter({ input, intent, snapshot, metrics, specialistOutput })
-      : buildDeterministicResponse({ input, intent, snapshot, metrics, specialistOutput });
+      ? await options.responseWriter(writerInput)
+      : envWriter
+        ? await envWriter(writerInput)
+        : buildDeterministicResponse(writerInput);
 
     const qa = validateAdvisorResponse({ response, snapshot });
     const finalResponse = qa.correctedResponse ?? response;
