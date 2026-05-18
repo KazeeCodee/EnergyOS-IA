@@ -20,6 +20,16 @@ export const AdvisorChatInputSchema = z.object({
   files: z.array(AdvisorFileSchema).default([]),
 });
 
+export const AdvisorSnapshotQuerySchema = z.object({
+  companyId: z.string().uuid(),
+  companyName: z.string().trim().min(1).max(200).optional(),
+  nemo: z.string().trim().regex(/^[A-Za-z0-9]{8}$/).transform((value) => value.toUpperCase()),
+  period: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  includePrivateContext: z.union([z.boolean(), z.enum(['true', 'false'])])
+    .default(false)
+    .transform((value) => value === true || value === 'true'),
+});
+
 export const EvidenceRefSchema = z.object({
   source: z.string().min(1),
   label: z.string().min(1),
@@ -238,6 +248,7 @@ export const AdvisorRunOutputSchema = z.object({
 
 export type AdvisorFile = z.infer<typeof AdvisorFileSchema>;
 export type AdvisorChatInput = z.infer<typeof AdvisorChatInputSchema>;
+export type AdvisorSnapshotQuery = z.infer<typeof AdvisorSnapshotQuerySchema>;
 export type EvidenceRef = z.infer<typeof EvidenceRefSchema>;
 export type EnergySnapshot = z.infer<typeof EnergySnapshotSchema>;
 export type AdvisorMetrics = z.infer<typeof AdvisorMetricsSchema>;
