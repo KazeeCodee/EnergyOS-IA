@@ -1,5 +1,3 @@
-import { createRailwaySql } from '../db/client.js';
-import { getClientPrivateContext } from '../tools/clientPrivateContext.js';
 import {
   EnergySnapshotSchema,
   type EnergySnapshot,
@@ -19,8 +17,13 @@ export type EnergySnapshotInput = {
   includePrivateContext?: boolean;
   userToken?: string;
   sqlFactory?: () => SnapshotSql;
-  privateContextLoader?: typeof getClientPrivateContext;
+  privateContextLoader?: PrivateContextLoader;
 };
+
+export type PrivateContextLoader = (input: {
+  nemo: string;
+  userToken?: string;
+}) => Promise<ClientPrivateContextResult>;
 
 type AgentRow = {
   nemo: string;
@@ -198,10 +201,23 @@ async function resolveSelectedPeriod(
   return latest;
 }
 
+async function createDefaultSql(): Promise<SnapshotSql> {
+  const { createRailwaySql } = await import('../db/client.js');
+  return createRailwaySql() as SnapshotSql;
+}
+
+async function loadDefaultPrivateContext(input: {
+  nemo: string;
+  userToken?: string;
+}): Promise<ClientPrivateContextResult> {
+  const { getClientPrivateContext } = await import('../tools/clientPrivateContext.js');
+  return getClientPrivateContext(input);
+}
+
 export async function buildEnergySnapshot(input: EnergySnapshotInput): Promise<EnergySnapshot> {
   const nemo = normalizeNemo(input.nemo);
-  const sql = input.sqlFactory ? input.sqlFactory() : createRailwaySql() as SnapshotSql;
-  const privateContextLoader = input.privateContextLoader ?? getClientPrivateContext;
+  const sql = input.sqlFactory ? input.sqlFactory() : await createDefaultSql();
+  const privateContextLoader = input.privateContextLoader ?? loadDefaultPrivateContext;
 
   try {
     const selected = await resolveSelectedPeriod(sql, nemo, input.period);
