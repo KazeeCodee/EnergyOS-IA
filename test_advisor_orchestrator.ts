@@ -117,6 +117,27 @@ assert.equal(greeting.findings.length, 0);
 assert.equal(greeting.recommendations.length, 0);
 assert.equal(greeting.dataUsed.length, 0);
 
+let conversationSnapshotCalls = 0;
+const capabilityQuestion = await runAdvisorChat({
+  ...baseInput,
+  question: 'que podes hacer?',
+  includePrivateContext: true,
+}, {
+  snapshotBuilder: async () => {
+    conversationSnapshotCalls += 1;
+    return makeSnapshot();
+  },
+  responseWriter: () => 'Resumen analitico indebido con 64904.06 MWh.',
+});
+
+assert.equal(capabilityQuestion.intent, 'conversation');
+assert.equal(conversationSnapshotCalls, 0);
+assert.match(capabilityQuestion.response, /Soy EnergyOS Advisor/i);
+assert.doesNotMatch(capabilityQuestion.response, /64904\.06|Demanda real|Hallazgos|Acciones recomendadas/i);
+assert.equal(capabilityQuestion.findings.length, 0);
+assert.equal(capabilityQuestion.recommendations.length, 0);
+assert.equal(capabilityQuestion.dataUsed.length, 0);
+
 const runStoreCalls: string[] = [];
 await runAdvisorChat(baseInput, {
   snapshotBuilder: async () => makeSnapshot(),

@@ -2,6 +2,7 @@ import type { AdvisorFile } from '../schemas/advisor.schema.js';
 
 export type AdvisorIntent =
   | 'greeting'
+  | 'conversation'
   | 'monthly_summary'
   | 'invoice'
   | 'contract'
@@ -29,14 +30,38 @@ function hasAny(text: string, patterns: RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(text));
 }
 
+function hasAnalyticSignal(text: string): boolean {
+  return /(resumen|analiza|analisis|costo|consumo|factura|dte|contrato|mater|ppa|ley|27191|renovable|reporte|informe|accion|plan|spot|periodo|mes|demanda|desvio|riesgo|cumplimiento|auditoria|conciliacion|vencimiento)/i.test(text);
+}
+
 export function classifyAdvisorIntent(input: IntentInput): AdvisorIntent {
   const question = normalize(input.question);
 
   if ((input.files?.length ?? 0) > 0) return 'document_intake';
 
-  const analyticWords = /(resumen|analiza|costo|consumo|factura|dte|contrato|mater|ley|27191|renovable|reporte|accion|plan)/i;
-  if (/^(hola( buen(os)? dias?)?|buen dia|buenos dias|buenas|hey|hello)(,? como estas)?[.!? ]*$/i.test(question) && !analyticWords.test(question)) {
+  const hasAnalyticIntent = hasAnalyticSignal(question);
+  if (/^(hola( buen(os)? dias?)?|buen dia|buenos dias|buenas|hey|hello)(,? como estas)?[.!? ]*$/i.test(question) && !hasAnalyticIntent) {
     return 'greeting';
+  }
+
+  if (!hasAnalyticIntent && hasAny(question, [
+    /^como estas[?!. ]*$/,
+    /^todo bien[?!. ]*$/,
+    /^gracias[!?. ]*$/,
+    /^muchas gracias[!?. ]*$/,
+    /^ok[!?. ]*$/,
+    /^dale[!?. ]*$/,
+    /^perfecto[!?. ]*$/,
+    /^genial[!?. ]*$/,
+    /^listo[!?. ]*$/,
+    /^entendido[!?. ]*$/,
+    /^quien sos[?!. ]*$/,
+    /^que podes hacer[?!. ]*$/,
+    /^como me ayudas[?!. ]*$/,
+    /^ayuda[?!. ]*$/,
+    /^necesito ayuda[?!. ]*$/,
+  ])) {
+    return 'conversation';
   }
 
   if (hasAny(question, [/factura/, /\bdte\b/, /liquidacion/, /concepto/, /audit/, /reconcili/])) {

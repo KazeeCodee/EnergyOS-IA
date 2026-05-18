@@ -5,6 +5,10 @@ import { calculateAdvisorMetrics } from './src/advisor/metricsV2.js';
 import type { EnergySnapshot } from './src/schemas/advisor.schema.js';
 
 assert.equal(classifyAdvisorIntent({ question: 'hola buenos dias', files: [] }), 'greeting');
+assert.equal(classifyAdvisorIntent({ question: 'gracias', files: [] }), 'conversation');
+assert.equal(classifyAdvisorIntent({ question: 'que podes hacer?', files: [] }), 'conversation');
+assert.equal(classifyAdvisorIntent({ question: 'ok', files: [] }), 'conversation');
+assert.equal(classifyAdvisorIntent({ question: 'como estas?', files: [] }), 'conversation');
 assert.equal(classifyAdvisorIntent({ question: 'dame un resumen del ultimo mes', files: [] }), 'monthly_summary');
 assert.equal(classifyAdvisorIntent({ question: 'revisa la factura dte', files: [] }), 'invoice');
 assert.equal(classifyAdvisorIntent({ question: 'que contrato deberia revisar?', files: [] }), 'contract');

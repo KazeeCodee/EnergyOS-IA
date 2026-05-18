@@ -68,11 +68,38 @@ function buildGreetingFromInput(input: AdvisorChatInput): string {
   return `Hola, buen dia. Estoy listo para ayudarte con ${inputCompanyLabel(input)}${period}. Decime que queres revisar y lo vemos con datos: costos, consumo, spot, contratos, facturas o cumplimiento renovable.`;
 }
 
+function buildConversationResponse(input: AdvisorChatInput): string {
+  const question = input.question
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '');
+  const label = inputCompanyLabel(input);
+
+  if (/gracias|muchas gracias/.test(question)) {
+    return `De nada. Cuando quieras, puedo ayudarte a revisar ${label} con datos concretos: costos, consumo, spot, contratos, facturas o cumplimiento renovable.`;
+  }
+
+  if (/^(ok|dale|perfecto|genial|listo|entendido)[!?. ]*$/.test(question)) {
+    return `Perfecto. Quedo atento para revisar lo que necesites de ${label}.`;
+  }
+
+  if (/quien sos|que podes hacer|como me ayudas|ayuda|necesito ayuda/.test(question)) {
+    return `Soy EnergyOS Advisor. Trabajo sobre ${label} y te puedo ayudar a entender costos, consumo, exposicion spot, contratos MATER/PPA, facturas/DTE, cumplimiento renovable, desvios y prioridades de accion. Si queres, pedime algo concreto, por ejemplo: "resumime el ultimo mes", "por que subio el costo" o "que contrato deberia revisar".`;
+  }
+
+  if (/como estas|todo bien/.test(question)) {
+    return `Bien, listo para ayudarte con ${label}. Decime que queres revisar y voy directo al punto.`;
+  }
+
+  return `Estoy listo para ayudarte con ${label}. Decime que queres revisar y respondo segun el pedido, sin correr analisis si no hace falta.`;
+}
+
 function buildGreeting(snapshot: EnergySnapshot): string {
   return `Hola, buen dia. Estoy listo para ayudarte con ${companyLabel(snapshot)}. Podes pedirme revisar costos, consumo, exposicion spot, contratos, facturas, cumplimiento renovable o desvios del periodo ${snapshot.resolvedPeriod ?? snapshot.requestedPeriod ?? 'disponible'}.`;
 }
 
-function buildEmptyGreetingMetrics(input: AdvisorChatInput): AdvisorMetrics {
+function buildEmptyInteractionMetrics(input: AdvisorChatInput): AdvisorMetrics {
   return {
     companyId: input.companyId,
     nemo: input.nemo,
@@ -90,6 +117,10 @@ function buildEmptyGreetingMetrics(input: AdvisorChatInput): AdvisorMetrics {
     estimatedRenewablePenaltyPesos: null,
     riskScore: null,
   };
+}
+
+function isLightweightInteraction(intent: AdvisorIntent): boolean {
+  return intent === 'greeting' || intent === 'conversation';
 }
 
 function buildDeterministicResponse(input: AdvisorResponseWriterInput): string {
@@ -163,15 +194,15 @@ export async function runAdvisorChat(
       },
     }) ?? null;
 
-    if (intent === 'greeting') {
+    if (isLightweightInteraction(intent)) {
       const output = AdvisorRunOutputSchema.parse({
-        response: buildGreetingFromInput(input),
+        response: intent === 'greeting' ? buildGreetingFromInput(input) : buildConversationResponse(input),
         intent,
         companyId: input.companyId,
         companyName: input.companyName,
         nemo: input.nemo,
         period: input.period ?? null,
-        metrics: buildEmptyGreetingMetrics(input),
+        metrics: buildEmptyInteractionMetrics(input),
         findings: [],
         recommendations: [],
         missingData: [],
