@@ -10,6 +10,7 @@ import askApi from './api/ask.js';
 import generateReportApi from './api/generate-report.js';
 import generateActionPlanApi from './api/generate-action-plan.js';
 import reconcileInvoiceApi from './api/reconcile-invoice.js';
+import advisorChatApi from './api/advisor-chat.js';
 
 const app = new Hono();
 
@@ -48,6 +49,7 @@ app.route('/agent/generate-action-plan', generateActionPlanApi);
 app.route('/agent/reconcile-invoice', reconcileInvoiceApi);
 app.route('/agent/feedback', feedbackApi);
 app.route('/agent', historyApi);
+app.route('/advisor/chat', advisorChatApi);
 
 // ─── Start server ──────────────────────────────────────────────────────────
 

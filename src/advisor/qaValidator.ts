@@ -20,7 +20,11 @@ function hasMissingDataContradiction(response: string, snapshot: EnergySnapshot)
 
 function findWrongNemos(response: string, snapshot: EnergySnapshot): string[] {
   const upper = response.toUpperCase();
-  const candidates = upper.match(/\b[A-Z0-9]{8}\b/g) ?? [];
+  const candidates = [
+    ...upper.matchAll(/\(([A-Z0-9]{8})\)/g),
+    ...upper.matchAll(/\bNEMO\s+([A-Z0-9]{8})\b/g),
+    ...upper.matchAll(/\bPARA\s+([A-Z0-9]{8})\b/g),
+  ].map((match) => match[1]);
   return [...new Set(candidates.filter((value) => value !== snapshot.nemo && !IGNORED_CODES.has(value)))];
 }
 
