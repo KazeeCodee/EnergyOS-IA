@@ -1,52 +1,176 @@
 import { Hono } from 'hono';
-import { AdvisorChatInputSchema } from '../schemas/advisor.schema.js';
-import { runAdvisorChat } from '../advisor/orchestrator.js';
-import { requireAuthorizedNemoIfConfigured } from './auth.js';
-import { createDefaultAdvisorRunStore } from '../advisor/runStore.js';
+import { AdvisorChatInputSchema, type AdvisorRunOutput } from '../schemas/advisor.schema.js';
+import { runAdvisorChat as defaultRunAdvisorChat } from '../advisor/orchestrator.js';
+import { requireAuthorizedNemoIfConfigured, type AuthResult } from './auth.js';
+import { createDefaultAdvisorRunStore, type AdvisorRunStore } from '../advisor/runStore.js';
+import {
+  appendMessage,
+  createConversation,
+  getConversationForUser,
+  loadConversationContext,
+  type AppendMessageInput,
+  type CreateConversationInput,
+  type GetConversationInput,
+  type LoadConversationContextInput,
+} from '../advisor/conversationStore.js';
+import type { Context } from 'hono';
+import type { AdvisorOrchestratorOptions } from '../advisor/orchestrator.js';
 
-const app = new Hono();
+export type AdvisorChatConversationStore = {
+  createConversation: (input: CreateConversationInput) => Promise<{ id: string }>;
+  getConversationForUser: (input: GetConversationInput) => Promise<unknown | null>;
+  appendMessage: (input: AppendMessageInput) => Promise<{ id: string }>;
+  loadConversationContext: (input: LoadConversationContextInput) => Promise<NonNullable<AdvisorOrchestratorOptions['conversationContext']>>;
+};
 
-app.post('/', async (c) => {
-  let body: unknown;
+export type AdvisorChatApiOptions = {
+  authorizeNemo?: (c: Context, requestedNemo: string | undefined) => Promise<AuthResult>;
+  createRunStore?: () => Promise<AdvisorRunStore>;
+  conversationStore?: AdvisorChatConversationStore;
+  runAdvisorChat?: (
+    input: Parameters<typeof defaultRunAdvisorChat>[0],
+    options: AdvisorOrchestratorOptions,
+  ) => Promise<AdvisorRunOutput>;
+};
+
+function defaultConversationStore(): AdvisorChatConversationStore {
+  return {
+    createConversation,
+    getConversationForUser,
+    appendMessage,
+    loadConversationContext,
+  };
+}
+
+function requireUserId(c: Context, auth: AuthResult): string | Response {
+  if (auth.userId) return auth.userId;
+  return c.json({ error: 'Usuario autenticado requerido para conversaciones del advisor' }, 401);
+}
+
+function buildTitleFromQuestion(question: string): string {
+  const clean = question.trim().replace(/\s+/g, ' ');
+  if (!clean) return 'Nueva conversacion';
+  return clean.length > 80 ? `${clean.slice(0, 80)}...` : clean;
+}
+
+async function parseJson(c: Context): Promise<{ ok: true; body: unknown } | { ok: false; response: Response }> {
   try {
-    body = await c.req.json();
+    return { ok: true, body: await c.req.json() };
   } catch {
-    return c.json({ error: 'Input invalido', details: 'JSON invalido' }, 400);
+    return {
+      ok: false,
+      response: c.json({ error: 'Input invalido', details: 'JSON invalido' }, 400),
+    };
   }
+}
 
-  const parsed = AdvisorChatInputSchema.safeParse(body);
+export function createAdvisorChatApi(options: AdvisorChatApiOptions = {}) {
+  const app = new Hono();
+  const authorizeNemo = options.authorizeNemo ?? requireAuthorizedNemoIfConfigured;
+  const createRunStore = options.createRunStore ?? createDefaultAdvisorRunStore;
+  const conversationStore = options.conversationStore ?? defaultConversationStore();
+  const runAdvisorChat = options.runAdvisorChat ?? defaultRunAdvisorChat;
 
-  if (!parsed.success) {
-    return c.json({
-      error: 'Input invalido',
-      details: parsed.error.issues,
-    }, 400);
-  }
+  app.post('/', async (c) => {
+    const json = await parseJson(c);
+    if (!json.ok) return json.response;
 
-  const auth = await requireAuthorizedNemoIfConfigured(c, parsed.data.nemo);
-  if (!auth.ok) return auth.response;
+    const parsed = AdvisorChatInputSchema.safeParse(json.body);
 
-  if (parsed.data.includePrivateContext && !auth.token) {
-    return c.json({
-      error: 'Authorization Bearer token requerido para usar contexto privado',
-    }, 401);
-  }
+    if (!parsed.success) {
+      return c.json({
+        error: 'Input invalido',
+        details: parsed.error.issues,
+      }, 400);
+    }
 
-  try {
-    const runStore = await createDefaultAdvisorRunStore();
-    const result = await runAdvisorChat({
-      ...parsed.data,
-      nemo: auth.nemo ?? parsed.data.nemo,
-    }, {
-      userToken: auth.token,
-      runStore,
-    });
-    return c.json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Error interno del advisor';
-    console.error('Error in advisor-chat:', error);
-    return c.json({ error: message }, 500);
-  }
-});
+    const auth = await authorizeNemo(c, parsed.data.nemo);
+    if (!auth.ok) return auth.response;
+    const userId = requireUserId(c, auth);
+    if (userId instanceof Response) return userId;
 
-export default app;
+    if (parsed.data.includePrivateContext && !auth.token) {
+      return c.json({
+        error: 'Authorization Bearer token requerido para usar contexto privado',
+      }, 401);
+    }
+
+    try {
+      const nemo = auth.nemo ?? parsed.data.nemo;
+      const conversation = parsed.data.conversationId
+        ? await conversationStore.getConversationForUser({
+          conversationId: parsed.data.conversationId,
+          userId,
+          companyId: parsed.data.companyId,
+          nemo,
+        })
+        : await conversationStore.createConversation({
+          userId,
+          companyId: parsed.data.companyId,
+          nemo,
+          title: buildTitleFromQuestion(parsed.data.question),
+        });
+
+      if (!conversation || typeof conversation !== 'object' || !('id' in conversation) || typeof conversation.id !== 'string') {
+        return c.json({ error: 'Conversacion no encontrada' }, 404);
+      }
+
+      const conversationId = conversation.id;
+      const userMessage = await conversationStore.appendMessage({
+        conversationId,
+        userId,
+        companyId: parsed.data.companyId,
+        nemo,
+        role: 'user',
+        content: parsed.data.question,
+        metadata: {
+          filesCount: parsed.data.files.length,
+        },
+      });
+
+      const conversationContext = await conversationStore.loadConversationContext({
+        conversationId,
+        userId,
+        companyId: parsed.data.companyId,
+        nemo,
+      });
+
+      const runStore = await createRunStore();
+      const result = await runAdvisorChat({
+        ...parsed.data,
+        conversationId,
+        nemo,
+      }, {
+        userToken: auth.token,
+        runStore,
+        conversationContext,
+      });
+
+      const assistantMessage = await conversationStore.appendMessage({
+        conversationId,
+        userId,
+        companyId: parsed.data.companyId,
+        nemo,
+        role: 'assistant',
+        content: result.response,
+        intent: result.intent,
+        metadata: result as unknown as Record<string, unknown>,
+      });
+
+      return c.json({
+        ...result,
+        conversationId,
+        messageId: userMessage.id,
+        assistantMessageId: assistantMessage.id,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error interno del advisor';
+      console.error('Error in advisor-chat:', error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  return app;
+}
+
+export default createAdvisorChatApi();

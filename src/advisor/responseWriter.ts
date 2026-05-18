@@ -34,6 +34,16 @@ export function buildAdvisorWriterMessages(input: AdvisorResponseWriterInput): A
       limitations: input.specialistOutput.limitations,
       dataUsed: input.snapshot.dataUsed,
       evidence: input.specialistOutput.evidence,
+      conversationContext: input.conversationContext ? {
+        summary: input.conversationContext.summary,
+        recentMessages: input.conversationContext.recentMessages.map((message) => ({
+          role: message.role,
+          content: message.content,
+          intent: message.intent,
+          createdAt: message.createdAt,
+        })),
+        memory: input.conversationContext.memory,
+      } : null,
     }, null, 2),
   };
 }

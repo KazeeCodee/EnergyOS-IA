@@ -5,6 +5,7 @@ import {
   type AdvisorFile,
   type AdvisorMetrics,
   type AdvisorRunOutput,
+  type ConversationContext,
   type EnergySnapshot,
 } from '../schemas/advisor.schema.js';
 import {
@@ -29,6 +30,7 @@ export type AdvisorResponseWriterInput = {
   snapshot: EnergySnapshot;
   metrics: AdvisorMetrics;
   specialistOutput: SpecialistOutput;
+  conversationContext?: ConversationContext;
 };
 
 export type AdvisorOrchestratorOptions = {
@@ -37,6 +39,7 @@ export type AdvisorOrchestratorOptions = {
   fileAiExtractor?: NonNullable<DocumentIntakeOptions['aiExtractor']>;
   runStore?: AdvisorRunStore;
   userToken?: string;
+  conversationContext?: ConversationContext;
 };
 
 function formatNumber(value: number | null, decimals = 2): string {
@@ -202,6 +205,7 @@ export async function runAdvisorChat(
         companyName: input.companyName,
         nemo: input.nemo,
         period: input.period ?? null,
+        conversationId: input.conversationId,
         metrics: buildEmptyInteractionMetrics(input),
         findings: [],
         recommendations: [],
@@ -245,7 +249,14 @@ export async function runAdvisorChat(
       files: input.files,
     });
 
-    const writerInput = { input, intent, snapshot, metrics, specialistOutput };
+    const writerInput = {
+      input,
+      intent,
+      snapshot,
+      metrics,
+      specialistOutput,
+      conversationContext: options.conversationContext,
+    };
     const envWriter = options.responseWriter ? null : await createAdvisorLlmResponseWriterFromEnv();
     const response = options.responseWriter
       ? await options.responseWriter(writerInput)
@@ -263,6 +274,7 @@ export async function runAdvisorChat(
       companyName: input.companyName,
       nemo: input.nemo,
       period: snapshot.resolvedPeriod,
+      conversationId: input.conversationId,
       metrics,
       findings: specialistOutput.findings,
       recommendations: specialistOutput.recommendations,
