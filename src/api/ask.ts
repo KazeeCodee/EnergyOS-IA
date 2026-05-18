@@ -3,6 +3,7 @@ import { AskInputSchema } from '../schemas/api.schema.js';
 import { createProviderFromEnv } from '../providers/factory.js';
 import { runAgenticLoop } from '../reasoning/agenticLoop.js';
 import { requireAuthIfConfigured } from './auth.js';
+import { buildAskTaskMessage, buildGreetingResponse, isSimpleGreeting } from '../utils/chatIntent.js';
 
 const app = new Hono();
 
@@ -17,13 +18,6 @@ app.post('/', async (c) => {
     }, 400);
   }
 
-  const provider = createProviderFromEnv();
-  if (!provider) {
-    return c.json({
-      error: 'No hay proveedor de IA configurado para responder chat.',
-    }, 503);
-  }
-
   const { companyId, nemo, period, question, includePrivateContext } = parsed.data;
   const auth = await requireAuthIfConfigured(c);
   if (!auth.ok) return auth.response;
@@ -34,24 +28,40 @@ app.post('/', async (c) => {
     }, 401);
   }
 
-  const taskMessage = `Responde la pregunta del usuario como EnergyOS Analyst.
+  if (isSimpleGreeting(question)) {
+    return c.json({
+      response: buildGreetingResponse(),
+      model: 'deterministic',
+      provider: 'energyos',
+      iterations: 0,
+      totalTokens: { input: 0, output: 0 },
+    });
+  }
 
-Contexto solicitado:
-- Empresa: ${companyId}
-- NEMO: ${nemo ?? 'no informado'}
-- Periodo: ${period ?? 'no informado'}
-- Usar contexto privado: ${includePrivateContext ? 'si' : 'no'}
+  const provider = createProviderFromEnv();
+  if (!provider) {
+    return c.json({
+      error: 'No hay proveedor de IA configurado para responder chat.',
+    }, 503);
+  }
 
-Pregunta:
-${question}
+  const taskMessage = buildAskTaskMessage({ companyId, nemo, period, question, includePrivateContext });
 
-Instrucciones:
-1. Si la pregunta requiere datos energeticos del periodo, usa calculate_metrics y detect_anomalies.
-2. Si la pregunta requiere contratos, vencimientos, responsables, evidencia o datos faltantes, usa get_client_private_context con el NEMO.
-3. No inventes datos. Si falta informacion, declarala.
-4. Separa hechos, interpretacion, recomendacion y limitaciones.`;
-
-  const result = await runAgenticLoop(provider, taskMessage, { userToken: auth.token });
+  let result;
+  try {
+    result = await runAgenticLoop(provider, taskMessage, { userToken: auth.token });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Error desconocido del proveedor IA';
+    console.error('Error in ask:', error);
+    if (isProviderUnavailableError(message)) {
+      return c.json({
+        error: 'El proveedor de IA esta temporalmente saturado. Proba nuevamente en unos minutos.',
+        provider: provider.name,
+        model: provider.model,
+      }, 503);
+    }
+    return c.json({ error: 'Error interno del agente al responder la consulta.' }, 500);
+  }
 
   return c.json({
     response: result.response,
@@ -61,5 +71,9 @@ Instrucciones:
     totalTokens: result.totalTokens,
   });
 });
+
+function isProviderUnavailableError(message: string): boolean {
+  return /Gemini API error (429|500|502|503|504)|UNAVAILABLE|RESOURCE_EXHAUSTED|high demand/i.test(message);
+}
 
 export default app;
