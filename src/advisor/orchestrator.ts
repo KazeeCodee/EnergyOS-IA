@@ -20,6 +20,7 @@ import {
   createGeminiInlineFileExtractorFromEnv,
   type DocumentIntakeOptions,
 } from './documentIntake.js';
+import type { AdvisorRunStore } from './runStore.js';
 
 export type AdvisorResponseWriterInput = {
   input: AdvisorChatInput;
@@ -33,6 +34,7 @@ export type AdvisorOrchestratorOptions = {
   snapshotBuilder?: (input: EnergySnapshotInput) => Promise<EnergySnapshot>;
   responseWriter?: (input: AdvisorResponseWriterInput) => string | Promise<string>;
   fileAiExtractor?: NonNullable<DocumentIntakeOptions['aiExtractor']>;
+  runStore?: AdvisorRunStore;
   userToken?: string;
 };
 
@@ -111,58 +113,84 @@ export async function runAdvisorChat(
 ): Promise<AdvisorRunOutput> {
   const input = AdvisorChatInputSchema.parse(rawInput);
   const snapshotBuilder = options.snapshotBuilder ?? buildEnergySnapshot;
+  let runId: string | null = null;
 
   const intent = classifyAdvisorIntent({
     question: input.question,
     files: input.files,
   });
 
-  const snapshot = await snapshotBuilder({
-    companyId: input.companyId,
-    companyName: input.companyName,
-    nemo: input.nemo,
-    period: input.period,
-    includePrivateContext: input.includePrivateContext,
-    userToken: options.userToken,
-  });
+  try {
+    runId = await options.runStore?.create({
+      companyId: input.companyId,
+      period: input.period ?? null,
+      nemo: input.nemo,
+      input: {
+        question: input.question,
+        includePrivateContext: input.includePrivateContext,
+        conversationId: input.conversationId,
+        filesCount: input.files.length,
+      },
+    }) ?? null;
 
-  const metrics = calculateAdvisorMetrics(snapshot);
-  const fileAnalyses = await analyzeAdvisorFiles(input.files, {
-    aiExtractor: options.fileAiExtractor ?? createGeminiInlineFileExtractorFromEnv() ?? undefined,
-  });
-  const specialistOutput = runAdvisorSpecialists({
-    intent,
-    snapshot,
-    metrics,
-    files: input.files,
-  });
+    const snapshot = await snapshotBuilder({
+      companyId: input.companyId,
+      companyName: input.companyName,
+      nemo: input.nemo,
+      period: input.period,
+      includePrivateContext: input.includePrivateContext,
+      userToken: options.userToken,
+    });
 
-  const response = options.responseWriter
-    ? await options.responseWriter({ input, intent, snapshot, metrics, specialistOutput })
-    : buildDeterministicResponse({ input, intent, snapshot, metrics, specialistOutput });
+    const metrics = calculateAdvisorMetrics(snapshot);
+    const fileAnalyses = await analyzeAdvisorFiles(input.files, {
+      aiExtractor: options.fileAiExtractor ?? createGeminiInlineFileExtractorFromEnv() ?? undefined,
+    });
+    const specialistOutput = runAdvisorSpecialists({
+      intent,
+      snapshot,
+      metrics,
+      files: input.files,
+    });
 
-  const qa = validateAdvisorResponse({ response, snapshot });
-  const finalResponse = qa.correctedResponse ?? response;
+    const response = options.responseWriter
+      ? await options.responseWriter({ input, intent, snapshot, metrics, specialistOutput })
+      : buildDeterministicResponse({ input, intent, snapshot, metrics, specialistOutput });
 
-  return AdvisorRunOutputSchema.parse({
-    response: finalResponse,
-    intent,
-    companyId: input.companyId,
-    companyName: input.companyName,
-    nemo: input.nemo,
-    period: snapshot.resolvedPeriod,
-    metrics,
-    findings: specialistOutput.findings,
-    recommendations: specialistOutput.recommendations,
-    missingData: specialistOutput.missingData,
-    limitations: specialistOutput.limitations,
-    dataUsed: snapshot.dataUsed,
-    evidence: specialistOutput.evidence,
-    filesReceived: input.files as AdvisorFile[],
-    fileAnalyses,
-    qa: {
-      passed: qa.passed,
-      issues: qa.issues,
-    },
-  });
+    const qa = validateAdvisorResponse({ response, snapshot });
+    const finalResponse = qa.correctedResponse ?? response;
+
+    const output = AdvisorRunOutputSchema.parse({
+      response: finalResponse,
+      intent,
+      companyId: input.companyId,
+      companyName: input.companyName,
+      nemo: input.nemo,
+      period: snapshot.resolvedPeriod,
+      metrics,
+      findings: specialistOutput.findings,
+      recommendations: specialistOutput.recommendations,
+      missingData: specialistOutput.missingData,
+      limitations: specialistOutput.limitations,
+      dataUsed: snapshot.dataUsed,
+      evidence: specialistOutput.evidence,
+      filesReceived: input.files as AdvisorFile[],
+      fileAnalyses,
+      qa: {
+        passed: qa.passed,
+        issues: qa.issues,
+      },
+    });
+
+    await options.runStore?.complete({
+      runId,
+      output: output as unknown as Record<string, unknown>,
+    });
+
+    return output;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Error desconocido';
+    await options.runStore?.fail({ runId, error: message });
+    throw error;
+  }
 }

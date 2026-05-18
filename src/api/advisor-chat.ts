@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { AdvisorChatInputSchema } from '../schemas/advisor.schema.js';
 import { runAdvisorChat } from '../advisor/orchestrator.js';
 import { requireAuthorizedNemoIfConfigured } from './auth.js';
+import { createDefaultAdvisorRunStore } from '../advisor/runStore.js';
 
 const app = new Hono();
 
@@ -26,11 +27,13 @@ app.post('/', async (c) => {
   }
 
   try {
+    const runStore = await createDefaultAdvisorRunStore();
     const result = await runAdvisorChat({
       ...parsed.data,
       nemo: auth.nemo ?? parsed.data.nemo,
     }, {
       userToken: auth.token,
+      runStore,
     });
     return c.json(result);
   } catch (error) {

@@ -3,6 +3,7 @@ import { AskInputSchema } from '../schemas/api.schema.js';
 import { requireAuthorizedNemoIfConfigured } from './auth.js';
 import { buildGreetingResponse, isSimpleGreeting } from '../utils/chatIntent.js';
 import { runAdvisorChat } from '../advisor/orchestrator.js';
+import { createDefaultAdvisorRunStore } from '../advisor/runStore.js';
 
 const app = new Hono();
 
@@ -44,6 +45,7 @@ app.post('/', async (c) => {
   }
 
   try {
+    const runStore = await createDefaultAdvisorRunStore();
     const result = await runAdvisorChat({
       companyId,
       companyName,
@@ -54,6 +56,7 @@ app.post('/', async (c) => {
       files,
     }, {
       userToken: auth.token,
+      runStore,
     });
 
     return c.json({

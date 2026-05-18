@@ -96,6 +96,24 @@ assert.match(monthly.response, /64904\.06 MWh/);
 assert.match(monthly.response, /ARS 2864505674/);
 assert.equal(monthly.qa.passed, true);
 
+const runStoreCalls: string[] = [];
+await runAdvisorChat(baseInput, {
+  snapshotBuilder: async () => makeSnapshot(),
+  runStore: {
+    async create(input) {
+      runStoreCalls.push(`create:${input.nemo}:${input.period}`);
+      return 'run-1';
+    },
+    async complete(input) {
+      runStoreCalls.push(`complete:${input.runId}:${input.output.nemo}`);
+    },
+    async fail(input) {
+      runStoreCalls.push(`fail:${input.runId}:${input.error}`);
+    },
+  },
+});
+assert.deepEqual(runStoreCalls, ['create:ACINVCSZ:2026-03', 'complete:run-1:ACINVCSZ']);
+
 const withFile = await runAdvisorChat({
   ...baseInput,
   question: 'analiza este adjunto',
