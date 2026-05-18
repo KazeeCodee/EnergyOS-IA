@@ -89,6 +89,11 @@ export type UpdateConversationTitleInput = GetConversationInput & {
   title: string;
 };
 
+export type UpdateConversationInput = GetConversationInput & {
+  title?: string;
+  status?: 'active' | 'archived';
+};
+
 export type DeleteConversationInput = GetConversationInput;
 
 function normalizeNemo(nemo: string): string {
@@ -316,20 +321,56 @@ export async function loadConversationContext(input: LoadConversationContextInpu
 }
 
 export async function updateConversationTitle(input: UpdateConversationTitleInput): Promise<void> {
+  await updateConversation(input);
+}
+
+export async function updateConversation(input: UpdateConversationInput): Promise<void> {
   const nemo = normalizeNemo(input.nemo);
-  const title = trimTitle(input.title);
+  const title = input.title === undefined ? undefined : trimTitle(input.title);
+  const status = input.status;
 
   await withSql(input.sqlFactory, async (sql) => {
-    await sql`
-      update public.advisor_conversations
-      set title = ${title},
-          updated_at = now()
-      where id = ${input.conversationId}
-        and user_id = ${input.userId}
-        and company_id = ${input.companyId}
-        and nemo = ${nemo}
-        and status <> 'deleted'
-    `;
+    if (title !== undefined && status !== undefined) {
+      await sql`
+        update public.advisor_conversations
+        set title = ${title},
+            status = ${status},
+            updated_at = now()
+        where id = ${input.conversationId}
+          and user_id = ${input.userId}
+          and company_id = ${input.companyId}
+          and nemo = ${nemo}
+          and status <> 'deleted'
+      `;
+      return;
+    }
+
+    if (title !== undefined) {
+      await sql`
+        update public.advisor_conversations
+        set title = ${title},
+            updated_at = now()
+        where id = ${input.conversationId}
+          and user_id = ${input.userId}
+          and company_id = ${input.companyId}
+          and nemo = ${nemo}
+          and status <> 'deleted'
+      `;
+      return;
+    }
+
+    if (status !== undefined) {
+      await sql`
+        update public.advisor_conversations
+        set status = ${status},
+            updated_at = now()
+        where id = ${input.conversationId}
+          and user_id = ${input.userId}
+          and company_id = ${input.companyId}
+          and nemo = ${nemo}
+          and status <> 'deleted'
+      `;
+    }
   });
 }
 
