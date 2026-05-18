@@ -14,6 +14,21 @@ export const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE
 });
 
 /**
+ * Cliente Supabase con el JWT del usuario en Authorization.
+ * Se usa para RPCs que dependen de auth.uid(), como current_user_nemos.
+ */
+export function createUserScopedSupabase(userToken: string) {
+  return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+    global: {
+      headers: {
+        Authorization: `Bearer ${userToken}`,
+      },
+    },
+  });
+}
+
+/**
  * Conexión directa a Railway PostgreSQL.
  * Se usa para las consultas pesadas sobre datos energéticos reales
  * (vistas L2, raw_dte, parámetros mensuales, exposición, etc.)

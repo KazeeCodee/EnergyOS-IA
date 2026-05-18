@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import { env } from '../config/env.js';
-import { supabase } from '../db/client.js';
+import { createUserScopedSupabase, supabase } from '../db/client.js';
 import { authorizeNemo } from '../auth/nemoAuthorization.js';
 
 export type AuthResult = {
@@ -65,10 +65,17 @@ export async function requireAuthorizedNemoIfConfigured(
     };
   }
 
+  if (!auth.token) {
+    return {
+      ok: false,
+      response: c.json({ error: 'Authorization Bearer token requerido' }, 401),
+    };
+  }
+
   const result = await authorizeNemo({
     token: auth.token,
     requestedNemo,
-    supabaseClient: supabase,
+    supabaseClient: createUserScopedSupabase(auth.token),
   });
 
   if (!result.ok) {
