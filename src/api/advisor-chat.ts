@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { AdvisorChatInputSchema } from '../schemas/advisor.schema.js';
 import { runAdvisorChat } from '../advisor/orchestrator.js';
-import { requireAuthIfConfigured } from './auth.js';
+import { requireAuthorizedNemoIfConfigured } from './auth.js';
 
 const app = new Hono();
 
@@ -16,7 +16,7 @@ app.post('/', async (c) => {
     }, 400);
   }
 
-  const auth = await requireAuthIfConfigured(c);
+  const auth = await requireAuthorizedNemoIfConfigured(c, parsed.data.nemo);
   if (!auth.ok) return auth.response;
 
   if (parsed.data.includePrivateContext && !auth.token) {
@@ -26,7 +26,10 @@ app.post('/', async (c) => {
   }
 
   try {
-    const result = await runAdvisorChat(parsed.data, {
+    const result = await runAdvisorChat({
+      ...parsed.data,
+      nemo: auth.nemo ?? parsed.data.nemo,
+    }, {
       userToken: auth.token,
     });
     return c.json(result);

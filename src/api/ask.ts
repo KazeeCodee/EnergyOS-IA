@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { AskInputSchema } from '../schemas/api.schema.js';
-import { requireAuthIfConfigured } from './auth.js';
+import { requireAuthorizedNemoIfConfigured } from './auth.js';
 import { buildGreetingResponse, isSimpleGreeting } from '../utils/chatIntent.js';
 import { runAdvisorChat } from '../advisor/orchestrator.js';
 
@@ -18,7 +18,7 @@ app.post('/', async (c) => {
   }
 
   const { companyId, companyName, nemo, period, question, includePrivateContext, files } = parsed.data;
-  const auth = await requireAuthIfConfigured(c);
+  const auth = await requireAuthorizedNemoIfConfigured(c, nemo);
   if (!auth.ok) return auth.response;
 
   if (includePrivateContext && !auth.token) {
@@ -47,7 +47,7 @@ app.post('/', async (c) => {
     const result = await runAdvisorChat({
       companyId,
       companyName,
-      nemo,
+      nemo: auth.nemo ?? nemo,
       period,
       question,
       includePrivateContext,

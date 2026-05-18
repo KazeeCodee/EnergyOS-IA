@@ -1,11 +1,14 @@
 import type { Context } from 'hono';
 import { env } from '../config/env.js';
 import { supabase } from '../db/client.js';
+import { authorizeNemo } from '../auth/nemoAuthorization.js';
 
 export type AuthResult = {
   ok: boolean;
   token?: string;
   userId?: string;
+  nemo?: string;
+  authorizedNemos?: string[];
   response?: Response;
 };
 
@@ -45,5 +48,41 @@ export async function requireAuthIfConfigured(c: Context): Promise<AuthResult> {
     ok: true,
     token,
     userId: data.user.id,
+  };
+}
+
+export async function requireAuthorizedNemoIfConfigured(
+  c: Context,
+  requestedNemo: string | undefined,
+): Promise<AuthResult> {
+  const auth = await requireAuthIfConfigured(c);
+  if (!auth.ok) return auth;
+
+  if (!env.REQUIRE_AGENT_AUTH) {
+    return {
+      ...auth,
+      nemo: requestedNemo?.trim().toUpperCase().slice(0, 8),
+    };
+  }
+
+  const result = await authorizeNemo({
+    token: auth.token,
+    requestedNemo,
+    supabaseClient: supabase,
+  });
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      response: c.json({ error: result.error }, result.status as 400 | 401 | 403 | 500),
+    };
+  }
+
+  return {
+    ok: true,
+    token: auth.token,
+    userId: result.userId,
+    nemo: result.nemo,
+    authorizedNemos: result.authorizedNemos,
   };
 }
