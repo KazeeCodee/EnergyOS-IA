@@ -132,4 +132,23 @@ const guidedResponse = await guidedResponder({
 assert.match(guidedResponse, /te ayudo|costos|consumo|facturas/i);
 assert.doesNotMatch(guidedResponse, /Decime que queres revisar y voy directo al punto/i);
 
+for (const question of [
+  'Si me vas a ayudar ?',
+  'Pero quiero saber si realmente me vas a ayudar ? estas para mi atencion ?',
+]) {
+  const reassuranceResponse = buildFallbackConversationResponse({
+    input: {
+      ...input.input,
+      question,
+    },
+    intent: 'conversation',
+    understanding: understandAdvisorTurn({ question, files: [] }),
+  });
+
+  assert.match(reassuranceResponse, /^Si\b|^Claro\b/i);
+  assert.match(reassuranceResponse, /te voy a ayudar|estoy para ayudarte|estoy aca/i);
+  assert.match(reassuranceResponse, /ACINDAR PTA\. V\. CONSTITUCION \(ACINVCSZ\)/i);
+  assert.doesNotMatch(reassuranceResponse, /Decime que queres entender o revisar|si hace falta analizar datos/i);
+}
+
 console.log('advisor conversation responder tests passed');

@@ -22,6 +22,21 @@ assert.equal(identityQuestion.shouldRunAnalysis, false);
 assert.equal(identityQuestion.responseMode, 'identity');
 assert.equal(identityQuestion.domainIntent, null);
 
+for (const question of [
+  'Si me vas a ayudar ?',
+  'Pero quiero saber si realmente me vas a ayudar ? estas para mi atencion ?',
+]) {
+  const reassurance = understandAdvisorTurn({
+    question,
+    files: [],
+  });
+
+  assert.equal(reassurance.primaryAct, 'reassurance');
+  assert.equal(reassurance.shouldRunAnalysis, false);
+  assert.equal(reassurance.responseMode, 'reassurance');
+  assert.equal(reassurance.domainIntent, null);
+}
+
 const guidedHelp = understandAdvisorTurn({
   question: 'Como estas? soy el director, pague por este sistema, tengo problemas con las finanzas energeticas y no se leer los datos. ayudame',
   files: [],

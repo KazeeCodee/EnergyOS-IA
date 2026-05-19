@@ -219,6 +219,33 @@ assert.equal(readinessQuestion.findings.length, 0);
 assert.equal(readinessQuestion.recommendations.length, 0);
 assert.equal(readinessQuestion.dataUsed.length, 0);
 
+for (const question of [
+  'Si me vas a ayudar ?',
+  'Pero quiero saber si realmente me vas a ayudar ? estas para mi atencion ?',
+]) {
+  let reassuranceSnapshotCalls = 0;
+  const reassuranceQuestion = await runAdvisorChat({
+    ...baseInput,
+    question,
+    includePrivateContext: true,
+  }, {
+    snapshotBuilder: async () => {
+      reassuranceSnapshotCalls += 1;
+      return makeSnapshot();
+    },
+    responseWriter: () => 'Resumen analitico indebido con 64904.06 MWh.',
+    conversationResponder: deterministicConversationResponder,
+  });
+
+  assert.equal(reassuranceQuestion.intent, 'conversation');
+  assert.equal(reassuranceSnapshotCalls, 0);
+  assert.match(reassuranceQuestion.response, /te voy a ayudar|estoy para ayudarte|estoy aca/i);
+  assert.doesNotMatch(reassuranceQuestion.response, /Decime que queres entender o revisar|Resumen analitico|64904\.06/i);
+  assert.equal(reassuranceQuestion.findings.length, 0);
+  assert.equal(reassuranceQuestion.recommendations.length, 0);
+  assert.equal(reassuranceQuestion.dataUsed.length, 0);
+}
+
 let noviceDirectorSnapshotCalls = 0;
 const noviceDirectorQuestion = await runAdvisorChat({
   ...baseInput,

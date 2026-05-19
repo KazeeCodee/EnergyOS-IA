@@ -14,6 +14,7 @@ export type AdvisorDomainIntent =
 export type AdvisorPrimaryAct =
   | 'social_only'
   | 'identity'
+  | 'reassurance'
   | 'thanks'
   | 'acknowledgement'
   | 'guided_help'
@@ -23,6 +24,7 @@ export type AdvisorPrimaryAct =
 export type AdvisorResponseMode =
   | 'social'
   | 'identity'
+  | 'reassurance'
   | 'guided_onboarding'
   | 'analysis'
   | 'conversation';
@@ -136,6 +138,18 @@ function isIdentityQuestion(text: string): boolean {
   );
 }
 
+function hasReassuranceSignal(text: string): boolean {
+  return hasAny(text, [
+    /\b(si|realmente|de verdad)\b.*\bayud\w*\b/i,
+    /\bme vas a ayud\w*\b/i,
+    /\bvas a ayud\w*\b/i,
+    /\bme ayudas\b/i,
+    /\bestas\b.*\b(mi atencion|atenderme|para atender|para ayudar)\b/i,
+    /\bpuedo contar\b.*\b(con vos|contigo|con esto)\b/i,
+    /\bhay alguien\b.*\b(atendiendo|ayudando)\b/i,
+  ]);
+}
+
 function inferUserRole(text: string): AdvisorUserRole {
   if (hasApproxToken(text, ['director', 'directora', 'dueno', 'duena', 'ceo', 'presidente'])) return 'director';
   if (hasApproxToken(text, ['gerente', 'manager', 'jefe', 'responsable'])) return 'manager';
@@ -224,6 +238,19 @@ export function understandAdvisorTurn(input: AdvisorTurnInput): AdvisorTurnUnder
       domainIntent: 'guided_diagnosis',
       responseMode: 'guided_onboarding',
       shouldRunAnalysis: true,
+      userRole,
+      dataLiteracyNeed,
+      businessPain,
+    };
+  }
+
+  if (hasReassuranceSignal(text)) {
+    return {
+      socialOpener,
+      primaryAct: 'reassurance',
+      domainIntent: null,
+      responseMode: 'reassurance',
+      shouldRunAnalysis: false,
       userRole,
       dataLiteracyNeed,
       businessPain,

@@ -17,7 +17,7 @@ export type AdvisorConversationResponderOptions = {
   provider?: AIProvider | null;
 };
 
-type ConversationAct = 'identity' | 'thanks' | 'acknowledgement' | 'greeting' | 'guided_help' | 'generic';
+type ConversationAct = 'identity' | 'reassurance' | 'thanks' | 'acknowledgement' | 'greeting' | 'guided_help' | 'generic';
 
 function normalize(text: string): string {
   return text
@@ -96,6 +96,7 @@ function getConversationAct(input: AdvisorConversationResponderInput): Conversat
 
   if (input.understanding?.primaryAct === 'guided_help') return 'guided_help';
   if (input.understanding?.primaryAct === 'identity') return 'identity';
+  if (input.understanding?.primaryAct === 'reassurance') return 'reassurance';
   if (input.understanding?.primaryAct === 'thanks') return 'thanks';
   if (input.understanding?.primaryAct === 'acknowledgement') return 'acknowledgement';
   if (input.understanding?.primaryAct === 'social_only') return 'greeting';
@@ -114,6 +115,7 @@ export function buildFallbackConversationResponse(input: AdvisorConversationResp
   const act = getConversationAct(input);
 
   if (act === 'identity') return buildIdentityResponse(label);
+  if (act === 'reassurance') return buildReassuranceResponse(label);
   if (act === 'guided_help') return buildGuidedHelpResponse(label);
   if (act === 'thanks') return `De nada. Cuando quieras, seguimos con ${label}.`;
   if (act === 'acknowledgement') return `Perfecto. Quedo atento para revisar lo que necesites de ${label}.`;
@@ -133,6 +135,14 @@ function buildIdentityResponse(label: string): string {
     `Soy EnergyOS Advisor, un asistente especializado en analisis y consultoria de datos energeticos para ${label}.`,
     'Mi funcion es ayudarte a entender costos, consumo, contratos, facturas, cumplimiento renovable, desvios y prioridades de accion cuando me lo pidas.',
     'Si me haces una pregunta general te respondo directo; si me pedis un analisis, reviso los datos disponibles y te marco que falta completar.',
+  ].join(' ');
+}
+
+function buildReassuranceResponse(label: string): string {
+  return [
+    `Si, estoy aca y te voy a ayudar con ${label}.`,
+    'No necesito que sepas leer los datos de entrada: mi trabajo es traducirlos a algo claro, priorizado y accionable.',
+    'Podemos ir paso a paso, empezando por lo que mas te preocupe o por un diagnostico inicial del ultimo periodo disponible.',
   ].join(' ');
 }
 
