@@ -34,6 +34,14 @@ function hasAnalyticSignal(text: string): boolean {
   return /(resumen|analiza|analisis|costo|consumo|factura|dte|contrato|mater|ppa|ley|27191|renovable|reporte|informe|accion|plan|spot|periodo|mes|demanda|desvio|riesgo|cumplimiento|auditoria|conciliacion|vencimiento)/i.test(text);
 }
 
+function hasGreetingSignal(text: string): boolean {
+  return /(^|[\s,.;:!?])(?:h+o+l+a+|buen dia|buenos dias|buenas|hey|hello)(?=$|[\s,.;:!?])/i.test(text);
+}
+
+function hasSocialQuestion(text: string): boolean {
+  return /\b(como estas|todo bien|que tal|como va)\b/i.test(text);
+}
+
 function hasDirectTaskRequest(text: string): boolean {
   return /\b(dame|resumime|resumi|analiza|analizame|revisa|revisame|genera|generame|arma|prepara|calcula|concilia|mostrame|explica)\b/i.test(text);
 }
@@ -52,27 +60,31 @@ export function classifyAdvisorIntent(input: IntentInput): AdvisorIntent {
   if (isReadinessConversation(input.question)) return 'conversation';
 
   const hasAnalyticIntent = hasAnalyticSignal(question);
-  if (/^(hola( buen(os)? dias?)?|buen dia|buenos dias|buenas|hey|hello)(,? como estas)?[.!? ]*$/i.test(question) && !hasAnalyticIntent) {
-    return 'greeting';
-  }
+  if (!hasAnalyticIntent) {
+    if (hasGreetingSignal(question) && hasSocialQuestion(question)) return 'conversation';
+    if (hasGreetingSignal(question)) return 'greeting';
 
-  if (!hasAnalyticIntent && hasAny(question, [
-    /^como estas[?!. ]*$/,
-    /^todo bien[?!. ]*$/,
-    /^gracias[!?. ]*$/,
-    /^muchas gracias[!?. ]*$/,
-    /^ok[!?. ]*$/,
-    /^dale[!?. ]*$/,
-    /^perfecto[!?. ]*$/,
-    /^genial[!?. ]*$/,
-    /^listo[!?. ]*$/,
-    /^entendido[!?. ]*$/,
-    /^quien sos[?!. ]*$/,
-    /^que podes hacer[?!. ]*$/,
-    /^como me ayudas[?!. ]*$/,
-    /^ayuda[?!. ]*$/,
-    /^necesito ayuda[?!. ]*$/,
-  ])) {
+    if (hasAny(question, [
+      /^como estas[?!. ]*$/,
+      /^todo bien[?!. ]*$/,
+      /^gracias[!?. ]*$/,
+      /^muchas gracias[!?. ]*$/,
+      /^ok[!?. ]*$/,
+      /^dale[!?. ]*$/,
+      /^perfecto[!?. ]*$/,
+      /^genial[!?. ]*$/,
+      /^listo[!?. ]*$/,
+      /^entendido[!?. ]*$/,
+      /^quien sos[?!. ]*$/,
+      /^que podes hacer[?!. ]*$/,
+      /^como me ayudas[?!. ]*$/,
+      /^me ayudas[?!. ]*$/,
+      /^ayuda[?!. ]*$/,
+      /^necesito ayuda[?!. ]*$/,
+    ])) {
+      return 'conversation';
+    }
+
     return 'conversation';
   }
 

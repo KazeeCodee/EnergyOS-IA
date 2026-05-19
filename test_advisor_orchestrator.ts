@@ -138,6 +138,30 @@ assert.equal(capabilityQuestion.findings.length, 0);
 assert.equal(capabilityQuestion.recommendations.length, 0);
 assert.equal(capabilityQuestion.dataUsed.length, 0);
 
+let emphaticGreetingSnapshotCalls = 0;
+const emphaticGreeting = await runAdvisorChat({
+  ...baseInput,
+  question: 'Holaaaa. como estas??????',
+  includePrivateContext: true,
+}, {
+  snapshotBuilder: async () => {
+    emphaticGreetingSnapshotCalls += 1;
+    return makeSnapshot();
+  },
+  responseWriter: () => 'Resumen de rendimiento energetico: Demanda real 64904.06 MWh. Recomendacion: revisar cobertura MATER.',
+});
+
+assert.equal(emphaticGreeting.intent, 'conversation');
+assert.equal(emphaticGreetingSnapshotCalls, 0);
+assert.match(emphaticGreeting.response, /Hola|listo/i);
+assert.doesNotMatch(
+  emphaticGreeting.response,
+  /64904\.06|Demanda real|Resumen de rendimiento|Recomendacion|spot|MATER/i,
+);
+assert.equal(emphaticGreeting.findings.length, 0);
+assert.equal(emphaticGreeting.recommendations.length, 0);
+assert.equal(emphaticGreeting.dataUsed.length, 0);
+
 let readinessSnapshotCalls = 0;
 const readinessQuestion = await runAdvisorChat({
   ...baseInput,

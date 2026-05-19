@@ -9,6 +9,9 @@ assert.equal(classifyAdvisorIntent({ question: 'gracias', files: [] }), 'convers
 assert.equal(classifyAdvisorIntent({ question: 'que podes hacer?', files: [] }), 'conversation');
 assert.equal(classifyAdvisorIntent({ question: 'ok', files: [] }), 'conversation');
 assert.equal(classifyAdvisorIntent({ question: 'como estas?', files: [] }), 'conversation');
+assert.equal(classifyAdvisorIntent({ question: 'Holaaaa. como estas??????', files: [] }), 'conversation');
+assert.equal(classifyAdvisorIntent({ question: 'holaaaa!!!!', files: [] }), 'greeting');
+assert.equal(classifyAdvisorIntent({ question: 'me ayudas?', files: [] }), 'conversation');
 assert.equal(
   classifyAdvisorIntent({ question: 'Como estas ? listo para trabajr con estos daots energeticos ?', files: [] }),
   'conversation',
