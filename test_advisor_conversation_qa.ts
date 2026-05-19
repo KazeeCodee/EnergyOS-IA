@@ -39,4 +39,44 @@ const pureGreeting = validateConversationResponse({
 
 assert.equal(pureGreeting.passed, true);
 
+const badIdentity = validateConversationResponse({
+  question: 'Que sos ?',
+  understanding: understandAdvisorTurn({ question: 'Que sos ?', files: [] }),
+  response: 'Estoy listo para ayudarte con ACINDAR PTA. V. CONSTITUCION. Decime que queres revisar.',
+});
+
+assert.equal(badIdentity.passed, false);
+assert.equal(badIdentity.reason, 'identity_question_ignored');
+
+const goodIdentity = validateConversationResponse({
+  question: 'Que sos ?',
+  understanding: understandAdvisorTurn({ question: 'Que sos ?', files: [] }),
+  response: 'Soy EnergyOS Advisor. Te ayudo a entender datos energeticos y convertirlos en decisiones claras.',
+});
+
+assert.equal(goodIdentity.passed, true);
+
+const badReassurance = validateConversationResponse({
+  question: 'Pero quiero saber si realmente me vas a ayudar ? estas para mi atencion ?',
+  understanding: understandAdvisorTurn({
+    question: 'Pero quiero saber si realmente me vas a ayudar ? estas para mi atencion ?',
+    files: [],
+  }),
+  response: 'Te leo. Soy EnergyOS Advisor y puedo ayudarte. Decime que queres entender o revisar.',
+});
+
+assert.equal(badReassurance.passed, false);
+assert.equal(badReassurance.reason, 'reassurance_ignored');
+
+const goodReassurance = validateConversationResponse({
+  question: 'Pero quiero saber si realmente me vas a ayudar ? estas para mi atencion ?',
+  understanding: understandAdvisorTurn({
+    question: 'Pero quiero saber si realmente me vas a ayudar ? estas para mi atencion ?',
+    files: [],
+  }),
+  response: 'Si, estoy aca para ayudarte de verdad y acompañarte paso a paso.',
+});
+
+assert.equal(goodReassurance.passed, true);
+
 console.log('advisor conversation qa tests passed');

@@ -1,7 +1,7 @@
 import type { AdvisorChatInput } from '../schemas/advisor.schema.js';
 import type { AIProvider } from '../providers/types.js';
 import { validateConversationResponse } from './conversationQa.js';
-import type { AdvisorTurnUnderstanding } from './turnUnderstanding.js';
+import { understandAdvisorTurn, type AdvisorTurnUnderstanding } from './turnUnderstanding.js';
 
 export type AdvisorConversationResponderInput = {
   input: AdvisorChatInput;
@@ -156,12 +156,16 @@ function buildGuidedHelpResponse(label: string): string {
 
 function buildSystemPrompt(): string {
   return [
-    'Sos el front desk conversacional de EnergyOS Advisor.',
-    'Tu trabajo es responder preguntas sociales, de identidad, de funcion, ayuda o alcance del asistente.',
+    'Sos la capa conversacional humana de EnergyOS Advisor.',
+    'Tu trabajo es responder bien el turno del usuario cuando NO corresponde ejecutar analisis de datos.',
+    'No sos una plantilla ni un menu. Responde al sentido completo del mensaje: saludo, duda, confianza, identidad, frustracion, ayuda o aclaracion.',
+    'Si el usuario busca confianza o atencion, contene y confirma que estas para ayudarlo.',
+    'Si pregunta que sos o tu funcion, explica quien sos y para que servís.',
+    'Si saluda, saluda natural sin disparar analisis.',
     'No ejecutes analisis energetico, no uses herramientas, no inventes metricas y no des recomendaciones operativas.',
     'No incluyas MWh, ARS, porcentajes, nombres de mercados, siglas tecnicas ni hallazgos si el usuario no pidio una tarea analitica.',
+    'No respondas con "Decime que queres revisar" si el usuario ya hizo una pregunta humana concreta.',
     'Responde de tu a tu, claro, humano, profesional y breve. Maximo 3 oraciones.',
-    'Si el usuario pregunta que sos o cual es tu funcion, explica que sos EnergyOS Advisor y que ayudas a analizar costos, consumo, contratos, facturas, cumplimiento renovable y acciones cuando el usuario lo pide.',
   ].join('\n');
 }
 
@@ -169,8 +173,16 @@ export function createAdvisorConversationResponder(options: AdvisorConversationR
   const provider = options.provider;
 
   return async (input) => {
-    const fallback = buildFallbackConversationResponse(input);
-    if (getConversationAct(input) !== 'generic') return fallback;
+    const enrichedInput = input.understanding
+      ? input
+      : {
+        ...input,
+        understanding: understandAdvisorTurn({
+          question: input.input.question,
+          files: input.input.files,
+        }),
+      };
+    const fallback = buildFallbackConversationResponse(enrichedInput);
     if (!provider) return fallback;
 
     try {
@@ -183,16 +195,18 @@ export function createAdvisorConversationResponder(options: AdvisorConversationR
             companyName: input.input.companyName,
             nemo: input.input.nemo,
             period: input.input.period ?? null,
+            conversationalAct: getConversationAct(enrichedInput),
+            understanding: enrichedInput.understanding ?? null,
           }, null, 2),
         }],
         [],
       );
       const text = response.text?.trim();
       if (!text || containsAnalyticOutput(text)) return fallback;
-      if (input.understanding) {
+      if (enrichedInput.understanding) {
         const qa = validateConversationResponse({
           question: input.input.question,
-          understanding: input.understanding,
+          understanding: enrichedInput.understanding,
           response: text,
         });
         if (!qa.passed) return fallback;
@@ -208,10 +222,6 @@ export async function createAdvisorConversationResponderFromEnv(): Promise<Advis
   let cachedProvider: AIProvider | null | undefined;
 
   return async (input) => {
-    if (getConversationAct(input) !== 'generic') {
-      return buildFallbackConversationResponse(input);
-    }
-
     if (cachedProvider === undefined) {
       const { createProviderFromEnv } = await import('../providers/factory.js');
       cachedProvider = createProviderFromEnv();

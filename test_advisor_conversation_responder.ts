@@ -54,13 +54,34 @@ const guardedResponse = await guardedResponder({
 assert.match(guardedResponse, /Soy EnergyOS Advisor/i);
 assert.doesNotMatch(guardedResponse, /64904\.06|MWh|Recomendacion|MATER/i);
 
-let evasiveIdentityCalls = 0;
-const evasiveIdentityResponder = createAdvisorConversationResponder({
+let identityProviderCalls = 0;
+const identityProviderResponder = createAdvisorConversationResponder({
   provider: {
     name: 'fake',
     model: 'fake-model',
     async chat() {
-      evasiveIdentityCalls += 1;
+      identityProviderCalls += 1;
+      return {
+        text: 'Soy EnergyOS Advisor. Estoy para ayudarte a entender tus datos energeticos sin vueltas y convertirlos en decisiones concretas.',
+        toolCalls: [],
+        done: true,
+        usage: { inputTokens: 10, outputTokens: 10 },
+        stopReason: 'STOP',
+      };
+    },
+  },
+});
+
+const identityResponse = await identityProviderResponder(input);
+assert.match(identityResponse, /Soy EnergyOS Advisor/i);
+assert.match(identityResponse, /datos energeticos|decisiones/i);
+assert.equal(identityProviderCalls, 1);
+
+const badIdentityResponder = createAdvisorConversationResponder({
+  provider: {
+    name: 'fake',
+    model: 'fake-model',
+    async chat() {
       return {
         text: 'Estoy listo para ayudarte con ACINDAR PTA. V. CONSTITUCION. Decime que queres revisar.',
         toolCalls: [],
@@ -72,10 +93,9 @@ const evasiveIdentityResponder = createAdvisorConversationResponder({
   },
 });
 
-const identityResponse = await evasiveIdentityResponder(input);
-assert.match(identityResponse, /Soy EnergyOS Advisor/i);
-assert.match(identityResponse, /funcion/i);
-assert.equal(evasiveIdentityCalls, 0);
+const badIdentityFallback = await badIdentityResponder(input);
+assert.match(badIdentityFallback, /Soy EnergyOS Advisor/i);
+assert.match(badIdentityFallback, /funcion/i);
 
 const naturalResponder = createAdvisorConversationResponder({
   provider: {
@@ -136,7 +156,25 @@ for (const question of [
   'Si me vas a ayudar ?',
   'Pero quiero saber si realmente me vas a ayudar ? estas para mi atencion ?',
 ]) {
-  const reassuranceResponse = buildFallbackConversationResponse({
+  let reassuranceCalls = 0;
+  const reassuranceResponder = createAdvisorConversationResponder({
+    provider: {
+      name: 'fake',
+      model: 'fake-model',
+      async chat() {
+        reassuranceCalls += 1;
+        return {
+          text: 'Si. Estoy aca para ayudarte de verdad, con calma y paso a paso, usando solo la informacion autorizada de ACINDAR.',
+          toolCalls: [],
+          done: true,
+          usage: { inputTokens: 10, outputTokens: 10 },
+          stopReason: 'STOP',
+        };
+      },
+    },
+  });
+
+  const reassuranceResponse = await reassuranceResponder({
     input: {
       ...input.input,
       question,
@@ -147,8 +185,8 @@ for (const question of [
 
   assert.match(reassuranceResponse, /^Si\b|^Claro\b/i);
   assert.match(reassuranceResponse, /te voy a ayudar|estoy para ayudarte|estoy aca/i);
-  assert.match(reassuranceResponse, /ACINDAR PTA\. V\. CONSTITUCION \(ACINVCSZ\)/i);
   assert.doesNotMatch(reassuranceResponse, /Decime que queres entender o revisar|si hace falta analizar datos/i);
+  assert.equal(reassuranceCalls, 1);
 }
 
 console.log('advisor conversation responder tests passed');
