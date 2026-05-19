@@ -21,7 +21,7 @@ const chatInput = AdvisorChatInputSchema.parse({
   period: '2026-03',
   question: 'resumen del ultimo mes',
   includePrivateContext: true,
-  conversationId: 'thread-1',
+  conversationId: '22222222-2222-4222-8222-222222222222',
   files: [file],
 });
 
