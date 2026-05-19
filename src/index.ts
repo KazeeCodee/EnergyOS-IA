@@ -15,6 +15,7 @@ import advisorSnapshotApi from './api/advisor-snapshot.js';
 import advisorTasksApi from './api/advisor-tasks.js';
 import advisorConversationsApi from './api/advisor-conversations.js';
 import advisorMemoryApi from './api/advisor-memory.js';
+import { getProviderStatusFromEnv } from './providers/status.js';
 
 const app = new Hono();
 
@@ -41,7 +42,12 @@ app.get('/', (c) => {
 });
 
 app.get('/health', (c) => {
-  return c.json({ status: 'ok', timestamp: new Date().toISOString() });
+  return c.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    ai: getProviderStatusFromEnv(),
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.RAILWAY_DEPLOYMENT_ID ?? null,
+  });
 });
 
 // ─── API Routes ────────────────────────────────────────────────────────────
