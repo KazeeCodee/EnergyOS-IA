@@ -56,7 +56,10 @@ function unique(values: string[]): string[] {
 }
 
 function shouldRun(intent: AdvisorIntent, accepted: AdvisorIntent[]): boolean {
-  return accepted.includes(intent) || intent === 'monthly_summary' || intent === 'general_question';
+  return accepted.includes(intent)
+    || intent === 'monthly_summary'
+    || intent === 'guided_diagnosis'
+    || intent === 'general_question';
 }
 
 export function runAdvisorSpecialists(input: SpecialistInput): SpecialistOutput {

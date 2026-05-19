@@ -1,8 +1,10 @@
 import type { AdvisorFile } from '../schemas/advisor.schema.js';
+import { understandAdvisorTurn, type AdvisorTurnUnderstanding } from './turnUnderstanding.js';
 
 export type AdvisorIntent =
   | 'greeting'
   | 'conversation'
+  | 'guided_diagnosis'
   | 'monthly_summary'
   | 'invoice'
   | 'contract'
@@ -15,6 +17,11 @@ export type AdvisorIntent =
 export type IntentInput = {
   question: string;
   files?: AdvisorFile[];
+};
+
+export type AdvisorTurnRoute = {
+  intent: AdvisorIntent;
+  understanding: AdvisorTurnUnderstanding;
 };
 
 function normalize(text: string): string {
@@ -53,16 +60,28 @@ export function isReadinessConversation(question: string): boolean {
 }
 
 export function classifyAdvisorIntent(input: IntentInput): AdvisorIntent {
+  return routeAdvisorTurn(input).intent;
+}
+
+export function routeAdvisorTurn(input: IntentInput): AdvisorTurnRoute {
   const question = normalize(input.question);
+  const understanding = understandAdvisorTurn(input);
 
-  if ((input.files?.length ?? 0) > 0) return 'document_intake';
+  if (understanding.domainIntent) {
+    return {
+      intent: understanding.domainIntent,
+      understanding,
+    };
+  }
 
-  if (isReadinessConversation(input.question)) return 'conversation';
+  if ((input.files?.length ?? 0) > 0) return { intent: 'document_intake', understanding };
+
+  if (isReadinessConversation(input.question)) return { intent: 'conversation', understanding };
 
   const hasAnalyticIntent = hasAnalyticSignal(question);
   if (!hasAnalyticIntent) {
-    if (hasGreetingSignal(question) && hasSocialQuestion(question)) return 'conversation';
-    if (hasGreetingSignal(question)) return 'greeting';
+    if (hasGreetingSignal(question) && hasSocialQuestion(question)) return { intent: 'conversation', understanding };
+    if (hasGreetingSignal(question)) return { intent: 'greeting', understanding };
 
     if (hasAny(question, [
       /^como estas[?!. ]*$/,
@@ -82,35 +101,35 @@ export function classifyAdvisorIntent(input: IntentInput): AdvisorIntent {
       /^ayuda[?!. ]*$/,
       /^necesito ayuda[?!. ]*$/,
     ])) {
-      return 'conversation';
+      return { intent: 'conversation', understanding };
     }
 
-    return 'conversation';
+    return { intent: 'conversation', understanding };
   }
 
   if (hasAny(question, [/factura/, /\bdte\b/, /liquidacion/, /concepto/, /audit/, /reconcili/])) {
-    return 'invoice';
+    return { intent: 'invoice', understanding };
   }
 
   if (hasAny(question, [/contrato/, /\bmater\b/, /\bppa\b/, /cobertura/, /vencimiento/, /descalce/])) {
-    return 'contract';
+    return { intent: 'contract', understanding };
   }
 
   if (hasAny(question, [/27191/, /renovable/, /cumplimiento/, /multa/, /brecha/])) {
-    return 'compliance';
+    return { intent: 'compliance', understanding };
   }
 
   if (hasAny(question, [/plan de accion/, /accion/, /tarea/, /prioridad/])) {
-    return 'action_plan';
+    return { intent: 'action_plan', understanding };
   }
 
   if (hasAny(question, [/reporte/, /informe/, /pdf/, /ejecutivo/])) {
-    return 'report';
+    return { intent: 'report', understanding };
   }
 
   if (hasAny(question, [/resumen/, /ultimo mes/, /periodo/, /mes/, /costo/, /consumo/, /spot/])) {
-    return 'monthly_summary';
+    return { intent: 'monthly_summary', understanding };
   }
 
-  return 'general_question';
+  return { intent: 'general_question', understanding };
 }

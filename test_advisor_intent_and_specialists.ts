@@ -22,6 +22,13 @@ assert.equal(
   classifyAdvisorIntent({ question: 'estas listo para trabajar con estos datos energeticos?', files: [] }),
   'conversation',
 );
+assert.equal(
+  classifyAdvisorIntent({
+    question: 'Como estas ? mira yo soy el dirtecto de esata emprsa y page por este este sistema. se que tengo algunso rpobelmas con las finzas enegeticas pero no se leer los datos. ayudame',
+    files: [],
+  }),
+  'guided_diagnosis',
+);
 assert.equal(classifyAdvisorIntent({ question: 'dame un resumen del ultimo mes', files: [] }), 'monthly_summary');
 assert.equal(classifyAdvisorIntent({ question: 'revisa la factura dte', files: [] }), 'invoice');
 assert.equal(classifyAdvisorIntent({ question: 'que contrato deberia revisar?', files: [] }), 'contract');

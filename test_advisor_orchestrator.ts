@@ -219,6 +219,26 @@ assert.equal(readinessQuestion.findings.length, 0);
 assert.equal(readinessQuestion.recommendations.length, 0);
 assert.equal(readinessQuestion.dataUsed.length, 0);
 
+let noviceDirectorSnapshotCalls = 0;
+const noviceDirectorQuestion = await runAdvisorChat({
+  ...baseInput,
+  question: 'Como estas ? mira yo soy el dirtecto de esata emprsa y page por este este sistema. se que tengo algunso rpobelmas con las finzas enegeticas pero no se leer los datos. ayudame',
+  includePrivateContext: true,
+}, {
+  snapshotBuilder: async () => {
+    noviceDirectorSnapshotCalls += 1;
+    return makeSnapshot();
+  },
+});
+
+assert.equal(noviceDirectorQuestion.intent, 'guided_diagnosis');
+assert.equal(noviceDirectorSnapshotCalls, 1);
+assert.doesNotMatch(noviceDirectorQuestion.response, /^Bien, listo para ayudarte/i);
+assert.doesNotMatch(noviceDirectorQuestion.response, /Decime que queres revisar y voy directo al punto/i);
+assert.match(noviceDirectorQuestion.response, /te ayudo|vamos a ordenar|empezamos/i);
+assert.match(noviceDirectorQuestion.response, /costos|facturas|consumo|finanzas|datos/i);
+assert.match(noviceDirectorQuestion.response, /Acindar Industria Argentina \(ACINVCSZ\)/);
+
 const runStoreCalls: string[] = [];
 await runAdvisorChat(baseInput, {
   snapshotBuilder: async () => makeSnapshot(),

@@ -13,7 +13,7 @@ import {
   type EnergySnapshotInput,
 } from '../context/energyosSnapshot.js';
 import { calculateAdvisorMetrics } from './metricsV2.js';
-import { classifyAdvisorIntent, type AdvisorIntent } from './intentRouter.js';
+import { routeAdvisorTurn, type AdvisorIntent } from './intentRouter.js';
 import { runAdvisorSpecialists, type SpecialistOutput } from './specialists.js';
 import { validateAdvisorResponse } from './qaValidator.js';
 import {
@@ -25,6 +25,7 @@ import {
   createAdvisorConversationResponderFromEnv,
   type AdvisorConversationResponder,
 } from './conversationResponder.js';
+import type { AdvisorTurnUnderstanding } from './turnUnderstanding.js';
 import type { AdvisorRunStore } from './runStore.js';
 import { createAdvisorLlmResponseWriterFromEnv } from './responseWriter.js';
 
@@ -34,6 +35,7 @@ export type AdvisorResponseWriterInput = {
   snapshot: EnergySnapshot;
   metrics: AdvisorMetrics;
   specialistOutput: SpecialistOutput;
+  understanding?: AdvisorTurnUnderstanding;
   conversationContext?: ConversationContext;
 };
 
@@ -91,14 +93,54 @@ function buildEmptyInteractionMetrics(input: AdvisorChatInput): AdvisorMetrics {
   };
 }
 
-function isLightweightInteraction(intent: AdvisorIntent): intent is 'greeting' | 'conversation' {
-  return intent === 'greeting' || intent === 'conversation';
+function isLightweightInteraction(
+  intent: AdvisorIntent,
+  understanding: AdvisorTurnUnderstanding,
+): intent is 'greeting' | 'conversation' {
+  return !understanding.shouldRunAnalysis && (intent === 'greeting' || intent === 'conversation');
+}
+
+function buildGuidedDiagnosisResponse(input: AdvisorResponseWriterInput): string {
+  const { snapshot, metrics, specialistOutput } = input;
+  const lines = [
+    'Te ayudo. Lo vamos a leer en terminos de negocio, no de tabla tecnica.',
+    `Para empezar, mire el periodo ${snapshot.resolvedPeriod ?? snapshot.requestedPeriod ?? 'disponible'} de ${companyLabel(snapshot)} y voy a ordenar el diagnostico en costos, consumo, facturas/contratos y riesgos.`,
+  ];
+
+  const businessFindings: string[] = [];
+  if (metrics.totalConsumptionMwh !== null) {
+    businessFindings.push(`Consumo: el sistema registra ${formatNumber(metrics.totalConsumptionMwh)} MWh de demanda real.`);
+  }
+  if (metrics.invoiceTotalPesos !== null) {
+    businessFindings.push(`Costo: la facturacion/DTE disponible es ARS ${formatMoneyRaw(metrics.invoiceTotalPesos)}${metrics.costDtePesosMwh !== null ? `, equivalente a ARS ${formatNumber(metrics.costDtePesosMwh)} por MWh` : ''}.`);
+  }
+  if (metrics.spotExposurePct !== null) {
+    businessFindings.push(`Riesgo: la exposicion spot estimada es ${formatPct(metrics.spotExposurePct)}, que conviene revisar porque puede mover el costo final.`);
+  }
+
+  if (businessFindings.length > 0) {
+    lines.push('', ...businessFindings.slice(0, 3).map((finding) => `- ${finding}`));
+  } else {
+    lines.push('', '- Todavia no veo datos suficientes para cuantificar el diagnostico; el primer paso es completar consumo, facturacion y contratos en EnergyOS/Data Room.');
+  }
+
+  const firstRecommendation = specialistOutput.recommendations[0];
+  if (firstRecommendation) {
+    lines.push('', `Siguiente paso: ${firstRecommendation.action} Lo priorizo porque ${firstRecommendation.reason}`);
+  } else if (specialistOutput.missingData.length > 0) {
+    lines.push('', `Siguiente paso: completar ${specialistOutput.missingData.slice(0, 3).join(', ')} para que el diagnostico sea mas confiable.`);
+  } else {
+    lines.push('', 'Siguiente paso: revisemos primero que parte del costo queres bajar o entender mejor: factura, consumo o cobertura contractual.');
+  }
+
+  return lines.join('\n');
 }
 
 function buildDeterministicResponse(input: AdvisorResponseWriterInput): string {
   const { intent, snapshot, metrics, specialistOutput } = input;
 
   if (intent === 'greeting') return buildGreeting(snapshot);
+  if (intent === 'guided_diagnosis') return buildGuidedDiagnosisResponse(input);
 
   const lines = [
     `Resumen para ${companyLabel(snapshot)} - periodo ${snapshot.resolvedPeriod ?? 'no resuelto'}.`,
@@ -148,10 +190,11 @@ export async function runAdvisorChat(
   const snapshotBuilder = options.snapshotBuilder ?? buildEnergySnapshot;
   let runId: string | null = null;
 
-  const intent = classifyAdvisorIntent({
+  const route = routeAdvisorTurn({
     question: input.question,
     files: input.files,
   });
+  const { intent, understanding } = route;
 
   try {
     runId = await options.runStore?.create({
@@ -166,7 +209,7 @@ export async function runAdvisorChat(
       },
     }) ?? null;
 
-    if (isLightweightInteraction(intent)) {
+    if (isLightweightInteraction(intent, understanding)) {
       const conversationResponder = options.conversationResponder ?? await createAdvisorConversationResponderFromEnv();
       const response = await conversationResponder({ input, intent });
       const output = AdvisorRunOutputSchema.parse({
@@ -226,6 +269,7 @@ export async function runAdvisorChat(
       snapshot,
       metrics,
       specialistOutput,
+      understanding,
       conversationContext: options.conversationContext,
     };
     const envWriter = options.responseWriter ? null : await createAdvisorLlmResponseWriterFromEnv();
