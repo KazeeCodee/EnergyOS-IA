@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { runAdvisorChat } from './src/advisor/orchestrator.js';
+import { buildFallbackConversationResponse } from './src/advisor/conversationResponder.js';
 import type { EnergySnapshot } from './src/schemas/advisor.schema.js';
 
 function makeSnapshot(): EnergySnapshot {
@@ -86,6 +87,8 @@ const baseInput = {
   files: [],
 };
 
+const deterministicConversationResponder = buildFallbackConversationResponse;
+
 const monthly = await runAdvisorChat(baseInput, {
   snapshotBuilder: async () => makeSnapshot(),
 });
@@ -107,6 +110,7 @@ const greeting = await runAdvisorChat({
     return makeSnapshot();
   },
   responseWriter: () => 'Resumen analitico indebido con 64904.06 MWh.',
+  conversationResponder: deterministicConversationResponder,
 });
 
 assert.equal(greeting.intent, 'greeting');
@@ -128,6 +132,7 @@ const capabilityQuestion = await runAdvisorChat({
     return makeSnapshot();
   },
   responseWriter: () => 'Resumen analitico indebido con 64904.06 MWh.',
+  conversationResponder: deterministicConversationResponder,
 });
 
 assert.equal(capabilityQuestion.intent, 'conversation');
@@ -137,6 +142,32 @@ assert.doesNotMatch(capabilityQuestion.response, /64904\.06|Demanda real|Hallazg
 assert.equal(capabilityQuestion.findings.length, 0);
 assert.equal(capabilityQuestion.recommendations.length, 0);
 assert.equal(capabilityQuestion.dataUsed.length, 0);
+
+for (const question of ['Que sos ?', 'Cual es tu fuicnion ?', 'Cual es tu funcion ?']) {
+  let identitySnapshotCalls = 0;
+  const identityQuestion = await runAdvisorChat({
+    ...baseInput,
+    question,
+    includePrivateContext: true,
+  }, {
+    snapshotBuilder: async () => {
+      identitySnapshotCalls += 1;
+      return makeSnapshot();
+    },
+    responseWriter: () => 'Resumen de rendimiento energetico indebido con 64904.06 MWh.',
+    conversationResponder: deterministicConversationResponder,
+  });
+
+  assert.equal(identityQuestion.intent, 'conversation');
+  assert.equal(identitySnapshotCalls, 0);
+  assert.match(identityQuestion.response, /Soy EnergyOS Advisor/i);
+  assert.match(identityQuestion.response, /funcion|ayudarte|especializado/i);
+  assert.match(identityQuestion.response, /costos|consumo|contratos|facturas/i);
+  assert.doesNotMatch(identityQuestion.response, /64904\.06|Demanda real|Hallazgos|Recomendacion/i);
+  assert.equal(identityQuestion.findings.length, 0);
+  assert.equal(identityQuestion.recommendations.length, 0);
+  assert.equal(identityQuestion.dataUsed.length, 0);
+}
 
 let emphaticGreetingSnapshotCalls = 0;
 const emphaticGreeting = await runAdvisorChat({
@@ -149,6 +180,7 @@ const emphaticGreeting = await runAdvisorChat({
     return makeSnapshot();
   },
   responseWriter: () => 'Resumen de rendimiento energetico: Demanda real 64904.06 MWh. Recomendacion: revisar cobertura MATER.',
+  conversationResponder: deterministicConversationResponder,
 });
 
 assert.equal(emphaticGreeting.intent, 'conversation');
@@ -173,6 +205,7 @@ const readinessQuestion = await runAdvisorChat({
     return makeSnapshot();
   },
   responseWriter: () => 'Hallazgos Principales: Demanda real 64904.06 MWh. Limitaciones de la Informacion: faltan contratos.',
+  conversationResponder: deterministicConversationResponder,
 });
 
 assert.equal(readinessQuestion.intent, 'conversation');

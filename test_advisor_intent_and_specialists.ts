@@ -7,6 +7,8 @@ import type { EnergySnapshot } from './src/schemas/advisor.schema.js';
 assert.equal(classifyAdvisorIntent({ question: 'hola buenos dias', files: [] }), 'greeting');
 assert.equal(classifyAdvisorIntent({ question: 'gracias', files: [] }), 'conversation');
 assert.equal(classifyAdvisorIntent({ question: 'que podes hacer?', files: [] }), 'conversation');
+assert.equal(classifyAdvisorIntent({ question: 'Que sos ?', files: [] }), 'conversation');
+assert.equal(classifyAdvisorIntent({ question: 'Cual es tu fuicnion ?', files: [] }), 'conversation');
 assert.equal(classifyAdvisorIntent({ question: 'ok', files: [] }), 'conversation');
 assert.equal(classifyAdvisorIntent({ question: 'como estas?', files: [] }), 'conversation');
 assert.equal(classifyAdvisorIntent({ question: 'Holaaaa. como estas??????', files: [] }), 'conversation');

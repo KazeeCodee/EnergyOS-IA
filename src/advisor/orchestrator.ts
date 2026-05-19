@@ -13,7 +13,7 @@ import {
   type EnergySnapshotInput,
 } from '../context/energyosSnapshot.js';
 import { calculateAdvisorMetrics } from './metricsV2.js';
-import { classifyAdvisorIntent, isReadinessConversation, type AdvisorIntent } from './intentRouter.js';
+import { classifyAdvisorIntent, type AdvisorIntent } from './intentRouter.js';
 import { runAdvisorSpecialists, type SpecialistOutput } from './specialists.js';
 import { validateAdvisorResponse } from './qaValidator.js';
 import {
@@ -21,6 +21,10 @@ import {
   createGeminiInlineFileExtractorFromEnv,
   type DocumentIntakeOptions,
 } from './documentIntake.js';
+import {
+  createAdvisorConversationResponderFromEnv,
+  type AdvisorConversationResponder,
+} from './conversationResponder.js';
 import type { AdvisorRunStore } from './runStore.js';
 import { createAdvisorLlmResponseWriterFromEnv } from './responseWriter.js';
 
@@ -37,6 +41,7 @@ export type AdvisorOrchestratorOptions = {
   snapshotBuilder?: (input: EnergySnapshotInput) => Promise<EnergySnapshot>;
   responseWriter?: (input: AdvisorResponseWriterInput) => string | Promise<string>;
   fileAiExtractor?: NonNullable<DocumentIntakeOptions['aiExtractor']>;
+  conversationResponder?: AdvisorConversationResponder;
   runStore?: AdvisorRunStore;
   userToken?: string;
   conversationContext?: ConversationContext;
@@ -60,46 +65,6 @@ function formatMoneyRaw(value: number | null): string {
 function companyLabel(snapshot: EnergySnapshot): string {
   const name = snapshot.companyName ?? snapshot.identity?.description ?? 'la empresa';
   return `${name} (${snapshot.nemo})`;
-}
-
-function inputCompanyLabel(input: AdvisorChatInput): string {
-  return input.companyName ? `${input.companyName} (${input.nemo})` : input.nemo;
-}
-
-function buildGreetingFromInput(input: AdvisorChatInput): string {
-  const period = input.period ? ` del periodo ${input.period}` : '';
-  return `Hola, buen dia. Estoy listo para ayudarte con ${inputCompanyLabel(input)}${period}. Decime que queres revisar y lo vemos con datos: costos, consumo, spot, contratos, facturas o cumplimiento renovable.`;
-}
-
-function buildConversationResponse(input: AdvisorChatInput): string {
-  const question = input.question
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '');
-  const label = inputCompanyLabel(input);
-
-  if (/gracias|muchas gracias/.test(question)) {
-    return `De nada. Cuando quieras, puedo ayudarte a revisar ${label} con datos concretos: costos, consumo, spot, contratos, facturas o cumplimiento renovable.`;
-  }
-
-  if (/^(ok|dale|perfecto|genial|listo|entendido)[!?. ]*$/.test(question)) {
-    return `Perfecto. Quedo atento para revisar lo que necesites de ${label}.`;
-  }
-
-  if (/quien sos|que podes hacer|como me ayudas|ayuda|necesito ayuda/.test(question)) {
-    return `Soy EnergyOS Advisor. Trabajo sobre ${label} y te puedo ayudar a entender costos, consumo, exposicion spot, contratos MATER/PPA, facturas/DTE, cumplimiento renovable, desvios y prioridades de accion. Si queres, pedime algo concreto, por ejemplo: "resumime el ultimo mes", "por que subio el costo" o "que contrato deberia revisar".`;
-  }
-
-  if (isReadinessConversation(input.question)) {
-    return `Si, estoy listo para trabajar con ${label}. Cuando me pidas una tarea concreta, reviso los datos disponibles y voy directo al punto. Si falta informacion para responder bien, te voy a indicar que completar y donde hacerlo en EnergyOS o en el Data Room.`;
-  }
-
-  if (/como estas|todo bien/.test(question)) {
-    return `Bien, listo para ayudarte con ${label}. Decime que queres revisar y voy directo al punto.`;
-  }
-
-  return `Estoy listo para ayudarte con ${label}. Decime que queres revisar y respondo segun el pedido, sin correr analisis si no hace falta.`;
 }
 
 function buildGreeting(snapshot: EnergySnapshot): string {
@@ -126,7 +91,7 @@ function buildEmptyInteractionMetrics(input: AdvisorChatInput): AdvisorMetrics {
   };
 }
 
-function isLightweightInteraction(intent: AdvisorIntent): boolean {
+function isLightweightInteraction(intent: AdvisorIntent): intent is 'greeting' | 'conversation' {
   return intent === 'greeting' || intent === 'conversation';
 }
 
@@ -202,8 +167,10 @@ export async function runAdvisorChat(
     }) ?? null;
 
     if (isLightweightInteraction(intent)) {
+      const conversationResponder = options.conversationResponder ?? await createAdvisorConversationResponderFromEnv();
+      const response = await conversationResponder({ input, intent });
       const output = AdvisorRunOutputSchema.parse({
-        response: intent === 'greeting' ? buildGreetingFromInput(input) : buildConversationResponse(input),
+        response,
         intent,
         companyId: input.companyId,
         companyName: input.companyName,
