@@ -9,6 +9,14 @@ assert.equal(classifyAdvisorIntent({ question: 'gracias', files: [] }), 'convers
 assert.equal(classifyAdvisorIntent({ question: 'que podes hacer?', files: [] }), 'conversation');
 assert.equal(classifyAdvisorIntent({ question: 'ok', files: [] }), 'conversation');
 assert.equal(classifyAdvisorIntent({ question: 'como estas?', files: [] }), 'conversation');
+assert.equal(
+  classifyAdvisorIntent({ question: 'Como estas ? listo para trabajr con estos daots energeticos ?', files: [] }),
+  'conversation',
+);
+assert.equal(
+  classifyAdvisorIntent({ question: 'estas listo para trabajar con estos datos energeticos?', files: [] }),
+  'conversation',
+);
 assert.equal(classifyAdvisorIntent({ question: 'dame un resumen del ultimo mes', files: [] }), 'monthly_summary');
 assert.equal(classifyAdvisorIntent({ question: 'revisa la factura dte', files: [] }), 'invoice');
 assert.equal(classifyAdvisorIntent({ question: 'que contrato deberia revisar?', files: [] }), 'contract');

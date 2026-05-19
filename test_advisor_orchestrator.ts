@@ -138,6 +138,30 @@ assert.equal(capabilityQuestion.findings.length, 0);
 assert.equal(capabilityQuestion.recommendations.length, 0);
 assert.equal(capabilityQuestion.dataUsed.length, 0);
 
+let readinessSnapshotCalls = 0;
+const readinessQuestion = await runAdvisorChat({
+  ...baseInput,
+  question: 'Como estas ? listo para trabajr con estos daots energeticos ?',
+  includePrivateContext: true,
+}, {
+  snapshotBuilder: async () => {
+    readinessSnapshotCalls += 1;
+    return makeSnapshot();
+  },
+  responseWriter: () => 'Hallazgos Principales: Demanda real 64904.06 MWh. Limitaciones de la Informacion: faltan contratos.',
+});
+
+assert.equal(readinessQuestion.intent, 'conversation');
+assert.equal(readinessSnapshotCalls, 0);
+assert.match(readinessQuestion.response, /listo/i);
+assert.doesNotMatch(
+  readinessQuestion.response,
+  /64904\.06|Demanda real|Hallazgos|Recomendacion|Limitaciones de la Informacion/i,
+);
+assert.equal(readinessQuestion.findings.length, 0);
+assert.equal(readinessQuestion.recommendations.length, 0);
+assert.equal(readinessQuestion.dataUsed.length, 0);
+
 const runStoreCalls: string[] = [];
 await runAdvisorChat(baseInput, {
   snapshotBuilder: async () => makeSnapshot(),

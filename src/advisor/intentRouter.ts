@@ -34,10 +34,22 @@ function hasAnalyticSignal(text: string): boolean {
   return /(resumen|analiza|analisis|costo|consumo|factura|dte|contrato|mater|ppa|ley|27191|renovable|reporte|informe|accion|plan|spot|periodo|mes|demanda|desvio|riesgo|cumplimiento|auditoria|conciliacion|vencimiento)/i.test(text);
 }
 
+function hasDirectTaskRequest(text: string): boolean {
+  return /\b(dame|resumime|resumi|analiza|analizame|revisa|revisame|genera|generame|arma|prepara|calcula|concilia|mostrame|explica)\b/i.test(text);
+}
+
+export function isReadinessConversation(question: string): boolean {
+  const text = normalize(question);
+  const readinessSignal = /(^|\b)(como estas\b.*\blisto|estas listo|estas preparado|estas disponible|listo para|preparado para|podemos empezar|podemos arrancar|arrancamos)\b/i.test(text);
+  return readinessSignal && !hasDirectTaskRequest(text);
+}
+
 export function classifyAdvisorIntent(input: IntentInput): AdvisorIntent {
   const question = normalize(input.question);
 
   if ((input.files?.length ?? 0) > 0) return 'document_intake';
+
+  if (isReadinessConversation(input.question)) return 'conversation';
 
   const hasAnalyticIntent = hasAnalyticSignal(question);
   if (/^(hola( buen(os)? dias?)?|buen dia|buenos dias|buenas|hey|hello)(,? como estas)?[.!? ]*$/i.test(question) && !hasAnalyticIntent) {

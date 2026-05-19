@@ -77,6 +77,8 @@ const input = {
 
 const messages = buildAdvisorWriterMessages(input);
 assert.match(messages.system, /No inventes/i);
+assert.match(messages.system, /No uses encabezados como "Limitaciones de la informacion"/i);
+assert.match(messages.system, /donde completarla/i);
 assert.match(messages.user, /ACINVCSZ/);
 assert.match(messages.user, /64904\.06/);
 assert.match(messages.user, /2864505674/);

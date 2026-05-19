@@ -13,7 +13,7 @@ import {
   type EnergySnapshotInput,
 } from '../context/energyosSnapshot.js';
 import { calculateAdvisorMetrics } from './metricsV2.js';
-import { classifyAdvisorIntent, type AdvisorIntent } from './intentRouter.js';
+import { classifyAdvisorIntent, isReadinessConversation, type AdvisorIntent } from './intentRouter.js';
 import { runAdvisorSpecialists, type SpecialistOutput } from './specialists.js';
 import { validateAdvisorResponse } from './qaValidator.js';
 import {
@@ -89,6 +89,10 @@ function buildConversationResponse(input: AdvisorChatInput): string {
 
   if (/quien sos|que podes hacer|como me ayudas|ayuda|necesito ayuda/.test(question)) {
     return `Soy EnergyOS Advisor. Trabajo sobre ${label} y te puedo ayudar a entender costos, consumo, exposicion spot, contratos MATER/PPA, facturas/DTE, cumplimiento renovable, desvios y prioridades de accion. Si queres, pedime algo concreto, por ejemplo: "resumime el ultimo mes", "por que subio el costo" o "que contrato deberia revisar".`;
+  }
+
+  if (isReadinessConversation(input.question)) {
+    return `Si, estoy listo para trabajar con ${label}. Cuando me pidas una tarea concreta, reviso los datos disponibles y voy directo al punto. Si falta informacion para responder bien, te voy a indicar que completar y donde hacerlo en EnergyOS o en el Data Room.`;
   }
 
   if (/como estas|todo bien/.test(question)) {
