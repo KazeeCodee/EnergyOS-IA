@@ -126,7 +126,11 @@ function buildGuidedDiagnosisResponse(input: AdvisorResponseWriterInput): string
 
   const firstRecommendation = specialistOutput.recommendations[0];
   if (firstRecommendation) {
-    lines.push('', `Siguiente paso: ${firstRecommendation.action} Lo priorizo porque ${firstRecommendation.reason}`);
+    const action = firstRecommendation.id === 'review_spot_coverage'
+      ? 'revisar si una parte importante de la energia esta quedando expuesta a precio variable y si conviene ajustar la cobertura contractual'
+      : firstRecommendation.action.replace(/\.$/, '');
+    const reason = firstRecommendation.reason.charAt(0).toLowerCase() + firstRecommendation.reason.slice(1).replace(/\.$/, '');
+    lines.push('', `Siguiente paso: ${action}. Lo priorizo porque ${reason}.`);
   } else if (specialistOutput.missingData.length > 0) {
     lines.push('', `Siguiente paso: completar ${specialistOutput.missingData.slice(0, 3).join(', ')} para que el diagnostico sea mas confiable.`);
   } else {

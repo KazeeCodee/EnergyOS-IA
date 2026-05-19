@@ -58,4 +58,27 @@ const fact = extractMemoryCandidates({
 assert.equal(fact[0].type, 'confirmed_fact');
 assert.equal(fact[0].confidence, 'high');
 
+const directorHelp = extractMemoryCandidates({
+  ...base,
+  role: 'user',
+  content: 'Como estas ? mira yo soy el director de esta empresa y pague por este sistema. se que tengo problemas con las finanzas energeticas pero no se leer los datos. ayudame',
+});
+
+assert.equal(directorHelp.length, 3);
+assert.equal(directorHelp.some((candidate) =>
+  candidate.type === 'preference'
+  && candidate.scope === 'user'
+  && /explicaciones simples|lenguaje de negocio/i.test(candidate.content)
+), true);
+assert.equal(directorHelp.some((candidate) =>
+  candidate.type === 'task_context'
+  && candidate.scope === 'user'
+  && /director|decisor/i.test(candidate.content)
+), true);
+assert.equal(directorHelp.some((candidate) =>
+  candidate.type === 'open_issue'
+  && candidate.scope === 'conversation'
+  && /finanzas energeticas|leer los datos|problemas/i.test(candidate.content)
+), true);
+
 console.log('advisor memory extractor tests passed');
