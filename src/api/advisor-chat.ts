@@ -14,6 +14,8 @@ import {
   type LoadConversationContextInput,
 } from '../advisor/conversationStore.js';
 import { maybeUpdateConversationSummary } from '../advisor/conversationSummary.js';
+import { extractMemoryCandidates, type MemoryCandidate } from '../advisor/memoryExtractor.js';
+import { createMemoryItem } from '../advisor/memoryStore.js';
 import type { Context } from 'hono';
 import type { AdvisorOrchestratorOptions } from '../advisor/orchestrator.js';
 
@@ -38,6 +40,8 @@ export type AdvisorChatApiOptions = {
     companyId: string;
     nemo: string;
   }) => Promise<void>;
+  extractMemoryCandidates?: typeof extractMemoryCandidates;
+  createMemoryItem?: (input: MemoryCandidate) => Promise<unknown>;
 };
 
 function defaultConversationStore(): AdvisorChatConversationStore {
@@ -78,6 +82,8 @@ export function createAdvisorChatApi(options: AdvisorChatApiOptions = {}) {
   const conversationStore = options.conversationStore ?? defaultConversationStore();
   const runAdvisorChat = options.runAdvisorChat ?? defaultRunAdvisorChat;
   const updateSummary = options.updateConversationSummary ?? maybeUpdateConversationSummary;
+  const extractMemory = options.extractMemoryCandidates ?? extractMemoryCandidates;
+  const persistMemory = options.createMemoryItem ?? createMemoryItem;
 
   app.post('/', async (c) => {
     const json = await parseJson(c);
@@ -172,6 +178,20 @@ export function createAdvisorChatApi(options: AdvisorChatApiOptions = {}) {
         nemo,
       }).catch((error) => {
         console.error('Error updating advisor conversation summary:', error);
+      });
+
+      const memoryCandidates = extractMemory({
+        userId,
+        companyId: parsed.data.companyId,
+        nemo,
+        conversationId,
+        sourceMessageId: userMessage.id,
+        role: 'user',
+        content: parsed.data.question,
+      });
+
+      await Promise.all(memoryCandidates.map((candidate) => persistMemory(candidate))).catch((error) => {
+        console.error('Error creating advisor memory:', error);
       });
 
       return c.json({

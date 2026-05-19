@@ -147,6 +147,27 @@ const app = createAdvisorChatApi({
   updateConversationSummary: async (input) => {
     calls.push(`summary:${input.conversationId}:${input.userId}:${input.nemo}`);
   },
+  extractMemoryCandidates: (input) => {
+    calls.push(`extract-memory:${input.sourceMessageId}:${input.content}`);
+    if (/prefiero/i.test(input.content)) {
+      return [{
+        scope: 'nemo',
+        userId: input.userId,
+        companyId: input.companyId,
+        nemo: input.nemo,
+        conversationId: input.conversationId,
+        type: 'preference',
+        content: input.content,
+        confidence: 'high',
+        sourceMessageId: input.sourceMessageId,
+        evidence: {},
+      }];
+    }
+    return [];
+  },
+  createMemoryItem: async (input) => {
+    calls.push(`memory:${input.type}:${input.sourceMessageId}:${input.nemo}`);
+  },
 });
 
 const createResponse = await app.request('/', {
@@ -191,6 +212,24 @@ const existingResponse = await app.request('/', {
 
 assert.equal(existingResponse.status, 200);
 assert.equal(calls.includes(`conversation:get:${conversationId}:${userId}:${companyId}:ACINVCSZ`), true);
+
+const memoryResponse = await app.request('/', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({
+    companyId,
+    companyName: 'Acindar Industria Argentina',
+    nemo: 'ACINVCSZ',
+    period: '2026-03',
+    question: 'Prefiero reportes ejecutivos.',
+    conversationId,
+    includePrivateContext: false,
+  }),
+});
+
+assert.equal(memoryResponse.status, 200);
+assert.equal(calls.includes(`extract-memory:${userMessageId}:Prefiero reportes ejecutivos.`), true);
+assert.equal(calls.includes(`memory:preference:${userMessageId}:ACINVCSZ`), true);
 
 const deniedApp = createAdvisorChatApi({
   authorizeNemo: async (c) => ({

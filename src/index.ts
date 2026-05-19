@@ -14,6 +14,7 @@ import advisorChatApi from './api/advisor-chat.js';
 import advisorSnapshotApi from './api/advisor-snapshot.js';
 import advisorTasksApi from './api/advisor-tasks.js';
 import advisorConversationsApi from './api/advisor-conversations.js';
+import advisorMemoryApi from './api/advisor-memory.js';
 
 const app = new Hono();
 
@@ -56,6 +57,7 @@ app.route('/advisor/chat', advisorChatApi);
 app.route('/advisor/snapshot', advisorSnapshotApi);
 app.route('/advisor/tasks', advisorTasksApi);
 app.route('/advisor/conversations', advisorConversationsApi);
+app.route('/advisor/memory', advisorMemoryApi);
 
 // ─── Start server ──────────────────────────────────────────────────────────
 
