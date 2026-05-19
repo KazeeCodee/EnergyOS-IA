@@ -1,9 +1,12 @@
 import type { AdvisorChatInput } from '../schemas/advisor.schema.js';
 import type { AIProvider } from '../providers/types.js';
+import { validateConversationResponse } from './conversationQa.js';
+import type { AdvisorTurnUnderstanding } from './turnUnderstanding.js';
 
 export type AdvisorConversationResponderInput = {
   input: AdvisorChatInput;
   intent: 'greeting' | 'conversation';
+  understanding?: AdvisorTurnUnderstanding;
 };
 
 export type AdvisorConversationResponder = (
@@ -14,7 +17,7 @@ export type AdvisorConversationResponderOptions = {
   provider?: AIProvider | null;
 };
 
-type ConversationAct = 'identity' | 'thanks' | 'acknowledgement' | 'greeting' | 'generic';
+type ConversationAct = 'identity' | 'thanks' | 'acknowledgement' | 'greeting' | 'guided_help' | 'generic';
 
 function normalize(text: string): string {
   return text
@@ -91,6 +94,12 @@ export function containsAnalyticOutput(text: string): boolean {
 function getConversationAct(input: AdvisorConversationResponderInput): ConversationAct {
   const question = input.input.question;
 
+  if (input.understanding?.primaryAct === 'guided_help') return 'guided_help';
+  if (input.understanding?.primaryAct === 'identity') return 'identity';
+  if (input.understanding?.primaryAct === 'thanks') return 'thanks';
+  if (input.understanding?.primaryAct === 'acknowledgement') return 'acknowledgement';
+  if (input.understanding?.primaryAct === 'social_only') return 'greeting';
+
   if (isIdentityOrCapabilityQuestion(question)) return 'identity';
   if (isThanks(question)) return 'thanks';
   if (isAcknowledgement(question)) return 'acknowledgement';
@@ -105,6 +114,7 @@ export function buildFallbackConversationResponse(input: AdvisorConversationResp
   const act = getConversationAct(input);
 
   if (act === 'identity') return buildIdentityResponse(label);
+  if (act === 'guided_help') return buildGuidedHelpResponse(label);
   if (act === 'thanks') return `De nada. Cuando quieras, seguimos con ${label}.`;
   if (act === 'acknowledgement') return `Perfecto. Quedo atento para revisar lo que necesites de ${label}.`;
 
@@ -123,6 +133,14 @@ function buildIdentityResponse(label: string): string {
     `Soy EnergyOS Advisor, un asistente especializado en analisis y consultoria de datos energeticos para ${label}.`,
     'Mi funcion es ayudarte a entender costos, consumo, contratos, facturas, cumplimiento renovable, desvios y prioridades de accion cuando me lo pidas.',
     'Si me haces una pregunta general te respondo directo; si me pedis un analisis, reviso los datos disponibles y te marco que falta completar.',
+  ].join(' ');
+}
+
+function buildGuidedHelpResponse(label: string): string {
+  return [
+    'Te ayudo. Vamos a ordenar esto en lenguaje de negocio, no como una tabla tecnica.',
+    `Para ${label}, el primer mapa es costos, consumo, facturas/contratos y riesgos.`,
+    'Cuando me pidas avanzar, arranco con un diagnostico guiado del periodo disponible y te marco que significa cada dato.',
   ].join(' ');
 }
 
@@ -161,6 +179,14 @@ export function createAdvisorConversationResponder(options: AdvisorConversationR
       );
       const text = response.text?.trim();
       if (!text || containsAnalyticOutput(text)) return fallback;
+      if (input.understanding) {
+        const qa = validateConversationResponse({
+          question: input.input.question,
+          understanding: input.understanding,
+          response: text,
+        });
+        if (!qa.passed) return fallback;
+      }
       return text;
     } catch {
       return fallback;

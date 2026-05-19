@@ -4,6 +4,7 @@ import {
   containsAnalyticOutput,
   createAdvisorConversationResponder,
 } from './src/advisor/conversationResponder.js';
+import { understandAdvisorTurn } from './src/advisor/turnUnderstanding.js';
 
 const input = {
   input: {
@@ -101,5 +102,34 @@ const naturalResponse = await naturalResponder({
 });
 assert.match(naturalResponse, /Soy EnergyOS Advisor/i);
 assert.match(naturalResponse, /datos energeticos/i);
+
+const guidedQuestion = 'Como estas ? soy el director de esta empresa, tengo problemas con las finanzas energeticas y no se leer los datos. ayudame';
+const guidedResponder = createAdvisorConversationResponder({
+  provider: {
+    name: 'fake',
+    model: 'fake-model',
+    async chat() {
+      return {
+        text: 'Bien, listo para ayudarte. Decime que queres revisar y voy directo al punto.',
+        toolCalls: [],
+        done: true,
+        usage: { inputTokens: 10, outputTokens: 10 },
+        stopReason: 'STOP',
+      };
+    },
+  },
+});
+
+const guidedResponse = await guidedResponder({
+  input: {
+    ...input.input,
+    question: guidedQuestion,
+  },
+  intent: 'conversation',
+  understanding: understandAdvisorTurn({ question: guidedQuestion, files: [] }),
+});
+
+assert.match(guidedResponse, /te ayudo|costos|consumo|facturas/i);
+assert.doesNotMatch(guidedResponse, /Decime que queres revisar y voy directo al punto/i);
 
 console.log('advisor conversation responder tests passed');

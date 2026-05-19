@@ -211,7 +211,7 @@ export async function runAdvisorChat(
 
     if (isLightweightInteraction(intent, understanding)) {
       const conversationResponder = options.conversationResponder ?? await createAdvisorConversationResponderFromEnv();
-      const response = await conversationResponder({ input, intent });
+      const response = await conversationResponder({ input, intent, understanding });
       const output = AdvisorRunOutputSchema.parse({
         response,
         intent,

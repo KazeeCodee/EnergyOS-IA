@@ -83,6 +83,33 @@ assert.match(messages.user, /ACINVCSZ/);
 assert.match(messages.user, /64904\.06/);
 assert.match(messages.user, /2864505674/);
 
+const guidedInput = {
+  ...input,
+  input: {
+    ...input.input,
+    question: 'Como estas? soy el director, tengo problemas con las finanzas energeticas y no se leer los datos. ayudame',
+  },
+  intent: 'guided_diagnosis',
+  understanding: {
+    socialOpener: true,
+    primaryAct: 'guided_help',
+    domainIntent: 'guided_diagnosis',
+    responseMode: 'guided_onboarding',
+    shouldRunAnalysis: true,
+    userRole: 'director',
+    dataLiteracyNeed: true,
+    businessPain: true,
+  },
+} satisfies AdvisorResponseWriterInput;
+
+const guidedMessages = buildAdvisorWriterMessages(guidedInput);
+assert.match(guidedMessages.system, /terminos de negocio/i);
+assert.match(guidedMessages.system, /no de tabla tecnica/i);
+assert.match(guidedMessages.system, /te ayudo|empecemos|vamos a ordenar/i);
+assert.doesNotMatch(guidedMessages.system, /volcar un reporte tecnico/i);
+assert.match(guidedMessages.user, /guided_onboarding/);
+assert.match(guidedMessages.user, /dataLiteracyNeed/);
+
 const providerCalls: string[] = [];
 const writer = createAdvisorLlmResponseWriter({
   provider: {
