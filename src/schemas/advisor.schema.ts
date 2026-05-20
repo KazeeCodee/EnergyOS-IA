@@ -280,6 +280,14 @@ export const ConversationContextSchema = z.object({
   memory: z.array(AdvisorMemoryItemOutputSchema),
 });
 
+export const AdvisorRuntimeSchema = z.object({
+  responseSource: z.enum(['llm', 'deterministic_fallback']),
+  provider: z.enum(['gemini', 'openai', 'anthropic', 'energyos']).nullable(),
+  model: z.string().nullable(),
+  fallbackReason: z.string().nullable(),
+  routerSource: z.enum(['llm', 'deterministic']),
+});
+
 export const AdvisorRunOutputSchema = z.object({
   response: z.string(),
   intent: z.string(),
@@ -303,6 +311,7 @@ export const AdvisorRunOutputSchema = z.object({
     passed: z.boolean(),
     issues: z.array(z.string()),
   }),
+  runtime: AdvisorRuntimeSchema,
 });
 
 export type AdvisorFile = z.infer<typeof AdvisorFileSchema>;
@@ -319,4 +328,5 @@ export type AdvisorConversationOutput = z.infer<typeof AdvisorConversationOutput
 export type AdvisorMessageOutput = z.infer<typeof AdvisorMessageOutputSchema>;
 export type AdvisorMemoryItemOutput = z.infer<typeof AdvisorMemoryItemOutputSchema>;
 export type ConversationContext = z.infer<typeof ConversationContextSchema>;
+export type AdvisorRuntime = z.infer<typeof AdvisorRuntimeSchema>;
 export type AdvisorRunOutput = z.infer<typeof AdvisorRunOutputSchema>;

@@ -6,6 +6,10 @@ import {
 } from './src/advisor/conversationResponder.js';
 import { understandAdvisorTurn } from './src/advisor/turnUnderstanding.js';
 
+function responseText(value: string | { text: string }): string {
+  return typeof value === 'string' ? value : value.text;
+}
+
 const input = {
   input: {
     companyId: '11111111-1111-4111-8111-111111111111',
@@ -51,8 +55,8 @@ const guardedResponse = await guardedResponder({
     question: 'Tengo una duda general sobre este chat',
   },
 });
-assert.match(guardedResponse, /Soy EnergyOS Advisor/i);
-assert.doesNotMatch(guardedResponse, /64904\.06|MWh|Recomendacion|MATER/i);
+assert.match(responseText(guardedResponse), /Soy EnergyOS Advisor/i);
+assert.doesNotMatch(responseText(guardedResponse), /64904\.06|MWh|Recomendacion|MATER/i);
 
 let identityProviderCalls = 0;
 const identityProviderResponder = createAdvisorConversationResponder({
@@ -73,8 +77,8 @@ const identityProviderResponder = createAdvisorConversationResponder({
 });
 
 const identityResponse = await identityProviderResponder(input);
-assert.match(identityResponse, /Soy EnergyOS Advisor/i);
-assert.match(identityResponse, /datos energeticos|decisiones/i);
+assert.match(responseText(identityResponse), /Soy EnergyOS Advisor/i);
+assert.match(responseText(identityResponse), /datos energeticos|decisiones/i);
 assert.equal(identityProviderCalls, 1);
 
 const badIdentityResponder = createAdvisorConversationResponder({
@@ -94,8 +98,8 @@ const badIdentityResponder = createAdvisorConversationResponder({
 });
 
 const badIdentityFallback = await badIdentityResponder(input);
-assert.match(badIdentityFallback, /Soy EnergyOS Advisor/i);
-assert.match(badIdentityFallback, /funcion/i);
+assert.match(responseText(badIdentityFallback), /Soy EnergyOS Advisor/i);
+assert.match(responseText(badIdentityFallback), /funcion/i);
 
 const naturalResponder = createAdvisorConversationResponder({
   provider: {
@@ -120,8 +124,8 @@ const naturalResponse = await naturalResponder({
     question: 'Tengo una duda general sobre como usar este chat',
   },
 });
-assert.match(naturalResponse, /Soy EnergyOS Advisor/i);
-assert.match(naturalResponse, /datos energeticos/i);
+assert.match(responseText(naturalResponse), /Soy EnergyOS Advisor/i);
+assert.match(responseText(naturalResponse), /datos energeticos/i);
 
 const guidedQuestion = 'Como estas ? soy el director de esta empresa, tengo problemas con las finanzas energeticas y no se leer los datos. ayudame';
 const guidedResponder = createAdvisorConversationResponder({
@@ -149,8 +153,8 @@ const guidedResponse = await guidedResponder({
   understanding: understandAdvisorTurn({ question: guidedQuestion, files: [] }),
 });
 
-assert.match(guidedResponse, /te ayudo|costos|consumo|facturas/i);
-assert.doesNotMatch(guidedResponse, /Decime que queres revisar y voy directo al punto/i);
+assert.match(responseText(guidedResponse), /te ayudo|costos|consumo|facturas/i);
+assert.doesNotMatch(responseText(guidedResponse), /Decime que queres revisar y voy directo al punto/i);
 
 for (const question of [
   'Si me vas a ayudar ?',
@@ -183,9 +187,9 @@ for (const question of [
     understanding: understandAdvisorTurn({ question, files: [] }),
   });
 
-  assert.match(reassuranceResponse, /^Si\b|^Claro\b/i);
-  assert.match(reassuranceResponse, /te voy a ayudar|estoy para ayudarte|estoy aca/i);
-  assert.doesNotMatch(reassuranceResponse, /Decime que queres entender o revisar|si hace falta analizar datos/i);
+  assert.match(responseText(reassuranceResponse), /^Si\b|^Claro\b/i);
+  assert.match(responseText(reassuranceResponse), /te voy a ayudar|estoy para ayudarte|estoy aca/i);
+  assert.doesNotMatch(responseText(reassuranceResponse), /Decime que queres entender o revisar|si hace falta analizar datos/i);
   assert.equal(reassuranceCalls, 1);
 }
 

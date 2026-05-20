@@ -4,6 +4,7 @@ import {
   type AdvisorChatInput,
   type AdvisorFile,
   type AdvisorMetrics,
+  type AdvisorRuntime,
   type AdvisorRunOutput,
   type ConversationContext,
   type EnergySnapshot,
@@ -13,7 +14,7 @@ import {
   type EnergySnapshotInput,
 } from '../context/energyosSnapshot.js';
 import { calculateAdvisorMetrics } from './metricsV2.js';
-import { routeAdvisorTurn, type AdvisorIntent } from './intentRouter.js';
+import { type AdvisorIntent, type AdvisorTurnRoute } from './intentRouter.js';
 import { runAdvisorSpecialists, type SpecialistOutput } from './specialists.js';
 import { validateAdvisorResponse } from './qaValidator.js';
 import {
@@ -22,12 +23,14 @@ import {
   type DocumentIntakeOptions,
 } from './documentIntake.js';
 import {
-  createAdvisorConversationResponderFromEnv,
+  createAdvisorConversationResponder,
   type AdvisorConversationResponder,
 } from './conversationResponder.js';
 import type { AdvisorTurnUnderstanding } from './turnUnderstanding.js';
 import type { AdvisorRunStore } from './runStore.js';
-import { createAdvisorLlmResponseWriterFromEnv } from './responseWriter.js';
+import { createAdvisorLlmResponseWriter } from './responseWriter.js';
+import { createProviderFromEnv } from '../providers/factory.js';
+import { resolveAdvisorTurn } from './turnDirector.js';
 
 export type AdvisorResponseWriterInput = {
   input: AdvisorChatInput;
@@ -44,6 +47,7 @@ export type AdvisorOrchestratorOptions = {
   responseWriter?: (input: AdvisorResponseWriterInput) => string | Promise<string>;
   fileAiExtractor?: NonNullable<DocumentIntakeOptions['aiExtractor']>;
   conversationResponder?: AdvisorConversationResponder;
+  turnDirector?: (input: AdvisorChatInput, context?: ConversationContext) => Promise<AdvisorTurnRoute>;
   runStore?: AdvisorRunStore;
   userToken?: string;
   conversationContext?: ConversationContext;
@@ -90,6 +94,33 @@ function buildEmptyInteractionMetrics(input: AdvisorChatInput): AdvisorMetrics {
     renewableGapYtdMwh: null,
     estimatedRenewablePenaltyPesos: null,
     riskScore: null,
+  };
+}
+
+function deterministicRuntime(
+  routerSource: AdvisorRuntime['routerSource'],
+  fallbackReason: string,
+): AdvisorRuntime {
+  return {
+    responseSource: 'deterministic_fallback',
+    provider: 'energyos',
+    model: null,
+    fallbackReason,
+    routerSource,
+  };
+}
+
+function llmRuntime(input: {
+  routerSource: AdvisorRuntime['routerSource'];
+  provider: AdvisorRuntime['provider'];
+  model: string | null;
+}): AdvisorRuntime {
+  return {
+    responseSource: 'llm',
+    provider: input.provider,
+    model: input.model,
+    fallbackReason: null,
+    routerSource: input.routerSource,
   };
 }
 
@@ -193,12 +224,17 @@ export async function runAdvisorChat(
   const input = AdvisorChatInputSchema.parse(rawInput);
   const snapshotBuilder = options.snapshotBuilder ?? buildEnergySnapshot;
   let runId: string | null = null;
+  const provider = createProviderFromEnv();
 
-  const route = routeAdvisorTurn({
-    question: input.question,
-    files: input.files,
-  });
+  const route = options.turnDirector
+    ? await options.turnDirector(input, options.conversationContext)
+    : await resolveAdvisorTurn({
+      input,
+      conversationContext: options.conversationContext,
+      provider,
+    });
   const { intent, understanding } = route;
+  const routerSource = route.routerSource ?? 'deterministic';
 
   try {
     runId = await options.runStore?.create({
@@ -214,10 +250,22 @@ export async function runAdvisorChat(
     }) ?? null;
 
     if (isLightweightInteraction(intent, understanding)) {
-      const conversationResponder = options.conversationResponder ?? await createAdvisorConversationResponderFromEnv();
-      const response = await conversationResponder({ input, intent, understanding });
+      const conversationResponder = options.conversationResponder ?? createAdvisorConversationResponder({ provider });
+      const rawConversationResponse = await conversationResponder({
+        input,
+        intent,
+        understanding,
+        conversationContext: options.conversationContext,
+        routerSource,
+      });
+      const conversationResponse = typeof rawConversationResponse === 'string'
+        ? {
+          text: rawConversationResponse,
+          runtime: deterministicRuntime(routerSource, 'custom_conversation_responder'),
+        }
+        : rawConversationResponse;
       const output = AdvisorRunOutputSchema.parse({
-        response,
+        response: conversationResponse.text,
         intent,
         companyId: input.companyId,
         companyName: input.companyName,
@@ -237,6 +285,7 @@ export async function runAdvisorChat(
           passed: true,
           issues: [],
         },
+        runtime: conversationResponse.runtime,
       });
 
       await options.runStore?.complete({
@@ -276,15 +325,40 @@ export async function runAdvisorChat(
       understanding,
       conversationContext: options.conversationContext,
     };
-    const envWriter = options.responseWriter ? null : await createAdvisorLlmResponseWriterFromEnv();
-    const response = options.responseWriter
-      ? await options.responseWriter(writerInput)
-      : envWriter
-        ? await envWriter(writerInput)
-        : buildDeterministicResponse(writerInput);
+    let runtime: AdvisorRuntime;
+    let response: string;
+
+    if (options.responseWriter) {
+      response = await options.responseWriter(writerInput);
+      runtime = llmRuntime({
+        routerSource,
+        provider: null,
+        model: null,
+      });
+    } else if (provider) {
+      try {
+        const writer = createAdvisorLlmResponseWriter({ provider });
+        response = await writer(writerInput);
+        runtime = llmRuntime({
+          routerSource,
+          provider: provider.name as AdvisorRuntime['provider'],
+          model: provider.model,
+        });
+      } catch (error) {
+        console.error('Advisor response writer provider error:', error instanceof Error ? error.message : error);
+        response = buildDeterministicResponse(writerInput);
+        runtime = deterministicRuntime(routerSource, 'provider_error');
+      }
+    } else {
+      response = buildDeterministicResponse(writerInput);
+      runtime = deterministicRuntime(routerSource, 'writer_unavailable');
+    }
 
     const qa = validateAdvisorResponse({ response, snapshot });
     const finalResponse = qa.correctedResponse ?? response;
+    const finalRuntime = qa.correctedResponse
+      ? deterministicRuntime(routerSource, `qa_corrected:${qa.issues.join(',')}`)
+      : runtime;
 
     const output = AdvisorRunOutputSchema.parse({
       response: finalResponse,
@@ -307,6 +381,7 @@ export async function runAdvisorChat(
         passed: qa.passed,
         issues: qa.issues,
       },
+      runtime: finalRuntime,
     });
 
     await options.runStore?.complete({

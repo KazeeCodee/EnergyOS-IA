@@ -190,12 +190,23 @@ export function createAdvisorChatApi(options: AdvisorChatApiOptions = {}) {
         content: parsed.data.question,
       });
 
-      await Promise.all(memoryCandidates.map((candidate) => persistMemory(candidate))).catch((error) => {
-        console.error('Error creating advisor memory:', error);
-      });
+	      await Promise.all(memoryCandidates.map((candidate) => persistMemory(candidate))).catch((error) => {
+	        console.error('Error creating advisor memory:', error);
+	      });
 
-      return c.json({
-        ...result,
+	      console.info('advisor_chat_completed', {
+	        conversationId,
+	        nemo,
+	        intent: result.intent,
+	        responseSource: result.runtime?.responseSource ?? null,
+	        provider: result.runtime?.provider ?? null,
+	        model: result.runtime?.model ?? null,
+	        fallbackReason: result.runtime?.fallbackReason ?? null,
+	        qaPassed: result.qa.passed,
+	      });
+
+	      return c.json({
+	        ...result,
         conversationId,
         messageId: userMessage.id,
         assistantMessageId: assistantMessage.id,

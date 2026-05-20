@@ -1,4 +1,4 @@
-import type { AdvisorChatInput } from '../schemas/advisor.schema.js';
+import type { AdvisorChatInput, AdvisorRuntime, ConversationContext } from '../schemas/advisor.schema.js';
 import type { AIProvider } from '../providers/types.js';
 import { validateConversationResponse } from './conversationQa.js';
 import { understandAdvisorTurn, type AdvisorTurnUnderstanding } from './turnUnderstanding.js';
@@ -7,17 +7,31 @@ export type AdvisorConversationResponderInput = {
   input: AdvisorChatInput;
   intent: 'greeting' | 'conversation';
   understanding?: AdvisorTurnUnderstanding;
+  conversationContext?: ConversationContext;
+  routerSource?: AdvisorRuntime['routerSource'];
+};
+
+export type AdvisorConversationResponse = {
+  text: string;
+  runtime: AdvisorRuntime;
 };
 
 export type AdvisorConversationResponder = (
   input: AdvisorConversationResponderInput,
-) => string | Promise<string>;
+) => string | AdvisorConversationResponse | Promise<string | AdvisorConversationResponse>;
 
 export type AdvisorConversationResponderOptions = {
   provider?: AIProvider | null;
 };
 
 type ConversationAct = 'identity' | 'reassurance' | 'thanks' | 'acknowledgement' | 'greeting' | 'guided_help' | 'generic';
+
+type FallbackReason =
+  | 'provider_unavailable'
+  | 'provider_error'
+  | 'analytic_output_rejected'
+  | 'empty_llm_response'
+  | `qa_rejected:${string}`;
 
 function normalize(text: string): string {
   return text
@@ -31,6 +45,29 @@ function normalize(text: string): string {
 
 function inputCompanyLabel(input: AdvisorChatInput): string {
   return input.companyName ? `${input.companyName} (${input.nemo})` : input.nemo;
+}
+
+function runtimeForProvider(provider: AIProvider, routerSource: AdvisorRuntime['routerSource']): AdvisorRuntime {
+  return {
+    responseSource: 'llm',
+    provider: provider.name as AdvisorRuntime['provider'],
+    model: provider.model,
+    fallbackReason: null,
+    routerSource,
+  };
+}
+
+function runtimeForFallback(
+  reason: FallbackReason,
+  routerSource: AdvisorRuntime['routerSource'],
+): AdvisorRuntime {
+  return {
+    responseSource: 'deterministic_fallback',
+    provider: 'energyos',
+    model: null,
+    fallbackReason: reason,
+    routerSource,
+  };
 }
 
 function tokens(text: string): string[] {
@@ -122,12 +159,12 @@ export function buildFallbackConversationResponse(input: AdvisorConversationResp
 
   if (act === 'greeting') {
     if (/\bcomo estas\b/i.test(normalize(question))) {
-      return `Bien, listo para ayudarte con ${label}. Decime que queres revisar y voy directo al punto.`;
+      return `Bien, aca y listo para ayudarte con ${label}.`;
     }
     return `Hola. Estoy listo para ayudarte con ${label}.`;
   }
 
-  return `Te leo. Soy EnergyOS Advisor y puedo ayudarte con ${label}. Decime que queres entender o revisar, y si hace falta analizar datos lo hago recien cuando me lo pidas.`;
+  return `Te leo. Soy EnergyOS Advisor y puedo ayudarte con ${label}. Si hace falta analizar datos, lo hago recien cuando me lo pidas.`;
 }
 
 function buildIdentityResponse(label: string): string {
@@ -158,9 +195,10 @@ function buildSystemPrompt(): string {
   return [
     'Sos la capa conversacional humana de EnergyOS Advisor.',
     'Tu trabajo es responder bien el turno del usuario cuando NO corresponde ejecutar analisis de datos.',
-    'No sos una plantilla ni un menu. Responde al sentido completo del mensaje: saludo, duda, confianza, identidad, frustracion, ayuda o aclaracion.',
+    'No sos una plantilla ni un menu. Responde al sentido completo del mensaje actual y al historial breve: saludo, duda, confianza, identidad, frustracion, ayuda o aclaracion.',
     'Si el usuario busca confianza o atencion, contene y confirma que estas para ayudarlo.',
     'Si pregunta que sos o tu funcion, explica quien sos y para que servís.',
+    'Si el usuario necesita ayuda para entender datos pero aun no pidio un analisis concreto, ofrece ordenar el problema y propone un primer paso sin ejecutar metricas.',
     'Si saluda, saluda natural sin disparar analisis.',
     'No ejecutes analisis energetico, no uses herramientas, no inventes metricas y no des recomendaciones operativas.',
     'No incluyas MWh, ARS, porcentajes, nombres de mercados, siglas tecnicas ni hallazgos si el usuario no pidio una tarea analitica.',
@@ -169,10 +207,24 @@ function buildSystemPrompt(): string {
   ].join('\n');
 }
 
+function compactConversationContext(context: ConversationContext | undefined) {
+  if (!context) return null;
+  return {
+    summary: context.summary,
+    recentMessages: context.recentMessages.slice(-8).map((message) => ({
+      role: message.role,
+      content: message.content,
+      intent: message.intent,
+    })),
+    memory: context.memory,
+  };
+}
+
 export function createAdvisorConversationResponder(options: AdvisorConversationResponderOptions): AdvisorConversationResponder {
   const provider = options.provider;
 
   return async (input) => {
+    const routerSource = input.routerSource ?? 'deterministic';
     const enrichedInput = input.understanding
       ? input
       : {
@@ -183,7 +235,12 @@ export function createAdvisorConversationResponder(options: AdvisorConversationR
         }),
       };
     const fallback = buildFallbackConversationResponse(enrichedInput);
-    if (!provider) return fallback;
+    if (!provider) {
+      return {
+        text: fallback,
+        runtime: runtimeForFallback('provider_unavailable', routerSource),
+      };
+    }
 
     try {
       const response = await provider.chat(
@@ -197,23 +254,47 @@ export function createAdvisorConversationResponder(options: AdvisorConversationR
             period: input.input.period ?? null,
             conversationalAct: getConversationAct(enrichedInput),
             understanding: enrichedInput.understanding ?? null,
+            conversationContext: compactConversationContext(input.conversationContext),
           }, null, 2),
         }],
         [],
       );
       const text = response.text?.trim();
-      if (!text || containsAnalyticOutput(text)) return fallback;
+      if (!text) {
+        return {
+          text: fallback,
+          runtime: runtimeForFallback('empty_llm_response', routerSource),
+        };
+      }
+      if (containsAnalyticOutput(text)) {
+        return {
+          text: fallback,
+          runtime: runtimeForFallback('analytic_output_rejected', routerSource),
+        };
+      }
       if (enrichedInput.understanding) {
         const qa = validateConversationResponse({
           question: input.input.question,
           understanding: enrichedInput.understanding,
           response: text,
         });
-        if (!qa.passed) return fallback;
+        if (!qa.passed) {
+          return {
+            text: fallback,
+            runtime: runtimeForFallback(`qa_rejected:${qa.reason ?? 'unknown'}`, routerSource),
+          };
+        }
       }
-      return text;
-    } catch {
-      return fallback;
+      return {
+        text,
+        runtime: runtimeForProvider(provider, routerSource),
+      };
+    } catch (error) {
+      console.error('Advisor conversation provider error:', error instanceof Error ? error.message : error);
+      return {
+        text: fallback,
+        runtime: runtimeForFallback('provider_error', routerSource),
+      };
     }
   };
 }

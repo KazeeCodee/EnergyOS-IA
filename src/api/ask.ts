@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import { AskInputSchema } from '../schemas/api.schema.js';
 import { requireAuthorizedNemoIfConfigured } from './auth.js';
-import { buildGreetingResponse, isSimpleGreeting } from '../utils/chatIntent.js';
 import { runAdvisorChat } from '../advisor/orchestrator.js';
 import { createDefaultAdvisorRunStore } from '../advisor/runStore.js';
 
@@ -28,16 +27,6 @@ app.post('/', async (c) => {
     }, 401);
   }
 
-  if (isSimpleGreeting(question)) {
-    return c.json({
-      response: buildGreetingResponse({ companyName, nemo, period }),
-      model: 'deterministic',
-      provider: 'energyos',
-      iterations: 0,
-      totalTokens: { input: 0, output: 0 },
-    });
-  }
-
   if (!nemo) {
     return c.json({
       error: 'NEMO requerido para responder con EnergyOS Advisor.',
@@ -61,8 +50,8 @@ app.post('/', async (c) => {
 
     return c.json({
       response: result.response,
-      model: 'advisor-v2',
-      provider: 'energyos',
+      model: result.runtime.model ?? 'advisor-v2',
+      provider: result.runtime.provider ?? 'energyos',
       iterations: 0,
       totalTokens: { input: 0, output: 0 },
       advisor: result,

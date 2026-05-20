@@ -38,6 +38,8 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().optional(),
+  GEMINI_TIMEOUT_MS: z.coerce.number().int().positive().default(20000),
+  GEMINI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(4096),
   GOOGLE_AI_API_KEY: z.string().optional(),
   GOOGLE_AI_MODEL: z.string().optional(),
 });

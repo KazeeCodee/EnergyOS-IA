@@ -22,6 +22,7 @@ export type IntentInput = {
 export type AdvisorTurnRoute = {
   intent: AdvisorIntent;
   understanding: AdvisorTurnUnderstanding;
+  routerSource?: 'llm' | 'deterministic';
 };
 
 function normalize(text: string): string {
@@ -71,17 +72,18 @@ export function routeAdvisorTurn(input: IntentInput): AdvisorTurnRoute {
     return {
       intent: understanding.domainIntent,
       understanding,
+      routerSource: 'deterministic',
     };
   }
 
-  if ((input.files?.length ?? 0) > 0) return { intent: 'document_intake', understanding };
+  if ((input.files?.length ?? 0) > 0) return { intent: 'document_intake', understanding, routerSource: 'deterministic' };
 
-  if (isReadinessConversation(input.question)) return { intent: 'conversation', understanding };
+  if (isReadinessConversation(input.question)) return { intent: 'conversation', understanding, routerSource: 'deterministic' };
 
   const hasAnalyticIntent = hasAnalyticSignal(question);
   if (!hasAnalyticIntent) {
-    if (hasGreetingSignal(question) && hasSocialQuestion(question)) return { intent: 'conversation', understanding };
-    if (hasGreetingSignal(question)) return { intent: 'greeting', understanding };
+    if (hasGreetingSignal(question) && hasSocialQuestion(question)) return { intent: 'conversation', understanding, routerSource: 'deterministic' };
+    if (hasGreetingSignal(question)) return { intent: 'greeting', understanding, routerSource: 'deterministic' };
 
     if (hasAny(question, [
       /^como estas[?!. ]*$/,
@@ -101,35 +103,35 @@ export function routeAdvisorTurn(input: IntentInput): AdvisorTurnRoute {
       /^ayuda[?!. ]*$/,
       /^necesito ayuda[?!. ]*$/,
     ])) {
-      return { intent: 'conversation', understanding };
+      return { intent: 'conversation', understanding, routerSource: 'deterministic' };
     }
 
-    return { intent: 'conversation', understanding };
+    return { intent: 'conversation', understanding, routerSource: 'deterministic' };
   }
 
   if (hasAny(question, [/factura/, /\bdte\b/, /liquidacion/, /concepto/, /audit/, /reconcili/])) {
-    return { intent: 'invoice', understanding };
+    return { intent: 'invoice', understanding, routerSource: 'deterministic' };
   }
 
   if (hasAny(question, [/contrato/, /\bmater\b/, /\bppa\b/, /cobertura/, /vencimiento/, /descalce/])) {
-    return { intent: 'contract', understanding };
+    return { intent: 'contract', understanding, routerSource: 'deterministic' };
   }
 
   if (hasAny(question, [/27191/, /renovable/, /cumplimiento/, /multa/, /brecha/])) {
-    return { intent: 'compliance', understanding };
+    return { intent: 'compliance', understanding, routerSource: 'deterministic' };
   }
 
   if (hasAny(question, [/plan de accion/, /accion/, /tarea/, /prioridad/])) {
-    return { intent: 'action_plan', understanding };
+    return { intent: 'action_plan', understanding, routerSource: 'deterministic' };
   }
 
   if (hasAny(question, [/reporte/, /informe/, /pdf/, /ejecutivo/])) {
-    return { intent: 'report', understanding };
+    return { intent: 'report', understanding, routerSource: 'deterministic' };
   }
 
   if (hasAny(question, [/resumen/, /ultimo mes/, /periodo/, /mes/, /costo/, /consumo/, /spot/])) {
-    return { intent: 'monthly_summary', understanding };
+    return { intent: 'monthly_summary', understanding, routerSource: 'deterministic' };
   }
 
-  return { intent: 'general_question', understanding };
+  return { intent: 'general_question', understanding, routerSource: 'deterministic' };
 }

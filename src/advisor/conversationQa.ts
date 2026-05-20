@@ -13,7 +13,9 @@ export type ConversationQaResult = {
     | 'vague_followup_after_user_context'
     | 'social_only_response_to_substantive_turn'
     | 'identity_question_ignored'
-    | 'reassurance_ignored';
+    | 'reassurance_ignored'
+    | 'asks_user_to_choose_client'
+    | 'analytic_output_in_conversation';
 };
 
 function normalize(text: string): string {
@@ -45,17 +47,35 @@ function acknowledgesGuidedNeed(response: string): boolean {
 
 function answersIdentity(response: string): boolean {
   const text = normalize(response);
-  return /\bsoy\b.*\benergyos advisor\b/i.test(text)
-    && /\b(ayud|datos|energet|analisis|decisiones|consultor|asistente)\b/i.test(text);
+  const hasIdentity = /\b(soy|me llamo|funciono como|mi funcion es|estoy para)\b/i.test(text)
+    && /\b(energyos advisor|advisor|asistente|consultor|asesor)\b/i.test(text);
+  return hasIdentity
+    && /\b(ayud|datos|energet|analisis|decisiones|consultor|asistente|costos|consumo|facturas|contratos)\b/i.test(text);
 }
 
 function reassuresUser(response: string): boolean {
   const text = normalize(response);
-  return /\b(si|claro|por supuesto|estoy aca|estoy para ayudarte|te voy a ayudar|voy a ayudarte)\b/i.test(text)
-    && /\b(ayud|acompan|paso a paso|atencion|calma|resolver)\b/i.test(text);
+  return /\b(si|claro|por supuesto|estoy aca|estoy para|te voy a ayudar|voy a ayudarte|estoy con vos|te acompano)\b/i.test(text)
+    && /\b(ayud|acompan|paso a paso|atencion|calma|resolver|ordenar|entender|trabajar)\b/i.test(text);
+}
+
+function asksUserToChooseClient(response: string): boolean {
+  return /\b(elegi|elige|selecciona|decime|indicame)\b.*\b(cliente|empresa|nemo)\b/i.test(normalize(response));
+}
+
+function containsAnalyticOutput(response: string): boolean {
+  return /(consumo total|demanda real|exposicion spot|compra spot|costo dte|factura total|puntaje de riesgo|cumplimiento renovable|\bmwh\b|\bars\b|\bmater\b|ley 27\.?191)/i.test(response);
 }
 
 export function validateConversationResponse(input: ConversationQaInput): ConversationQaResult {
+  if (asksUserToChooseClient(input.response)) {
+    return { passed: false, reason: 'asks_user_to_choose_client' };
+  }
+
+  if (input.understanding.primaryAct !== 'analytic_request' && containsAnalyticOutput(input.response)) {
+    return { passed: false, reason: 'analytic_output_in_conversation' };
+  }
+
   if (input.understanding.primaryAct === 'identity' && !answersIdentity(input.response)) {
     return { passed: false, reason: 'identity_question_ignored' };
   }

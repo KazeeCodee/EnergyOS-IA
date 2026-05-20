@@ -40,11 +40,25 @@ export class GeminiProvider implements AIProvider {
   model: string;
   private apiKey: string;
   private baseUrl: string;
+  private timeoutMs: number;
+  private maxOutputTokens: number;
+  private fetchImpl: typeof fetch;
 
-  constructor(apiKey: string, model = 'gemini-2.5-flash') {
+  constructor(
+    apiKey: string,
+    model = 'gemini-2.5-flash',
+    options: {
+      timeoutMs?: number;
+      maxOutputTokens?: number;
+      fetchImpl?: typeof fetch;
+    } = {},
+  ) {
     this.apiKey = apiKey;
     this.model = model;
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+    this.timeoutMs = options.timeoutMs ?? Number(process.env.GEMINI_TIMEOUT_MS ?? 20000);
+    this.maxOutputTokens = options.maxOutputTokens ?? Number(process.env.GEMINI_MAX_OUTPUT_TOKENS ?? 4096);
+    this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
   async chat(
@@ -59,25 +73,38 @@ export class GeminiProvider implements AIProvider {
       contents: this.convertMessages(messages),
       tools: this.convertTools(tools),
       generationConfig: {
-        maxOutputTokens: 4096,
+        maxOutputTokens: this.maxOutputTokens,
       },
     };
 
-    const response = await fetch(
-      `${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': this.apiKey,
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    let response: Response;
+    try {
+      response = await this.fetchImpl(
+        `${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': this.apiKey,
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
         },
-        body: JSON.stringify(body),
-      },
-    );
+      );
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Gemini API timeout after ${this.timeoutMs}ms for model ${this.model}`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Gemini API error ${response.status}: ${errorText}`);
+      throw new Error(`Gemini API error ${response.status} for model ${this.model}: ${errorText.slice(0, 500)}`);
     }
 
     const data = (await response.json()) as GeminiResponse;

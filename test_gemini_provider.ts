@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createProvider, createProviderFromEnv } from './src/providers/factory.js';
+import { GeminiProvider } from './src/providers/gemini.js';
 
 const provider = createProvider({
   provider: 'gemini',
@@ -23,6 +24,41 @@ process.env.GEMINI_MODEL = 'gemini-2.5-flash';
 const envProvider = createProviderFromEnv();
 assert.equal(envProvider?.name, 'gemini');
 assert.equal(envProvider?.model, 'gemini-2.5-flash');
+
+const successfulProvider = new GeminiProvider('test-key', 'gemini-test', {
+  fetchImpl: async () => new Response(JSON.stringify({
+    candidates: [{
+      content: {
+        role: 'model',
+        parts: [{ text: 'ok' }],
+      },
+      finishReason: 'STOP',
+    }],
+    usageMetadata: {
+      promptTokenCount: 2,
+      candidatesTokenCount: 1,
+    },
+  }), { status: 200 }),
+});
+
+const successfulResponse = await successfulProvider.chat('system', [{ role: 'user', content: 'hola' }], []);
+assert.equal(successfulResponse.text, 'ok');
+
+const timeoutProvider = new GeminiProvider('test-key', 'gemini-timeout', {
+  timeoutMs: 5,
+  fetchImpl: (_input, init) => new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => {
+      const error = new Error('aborted');
+      error.name = 'AbortError';
+      reject(error);
+    });
+  }),
+});
+
+await assert.rejects(
+  () => timeoutProvider.chat('system', [{ role: 'user', content: 'hola' }], []),
+  /Gemini API timeout/,
+);
 
 restoreEnv('GEMINI_API_KEY', previousGeminiKey);
 restoreEnv('GEMINI_MODEL', previousGeminiModel);
